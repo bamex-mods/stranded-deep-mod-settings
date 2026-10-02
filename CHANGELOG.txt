@@ -1,0 +1,7 @@
+v0.2.1
+------
+- Fixed MODS page not scrolling when controller/keyboard selection moves beyond the visible ScrollRect viewport.
+- Added per-control ISelectHandler auto-scroll behavior.
+- No public API changes.
+- No ModSettingsClient.cs changes.
+- No client mod rebuild required.
