@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "locale": "en",
+  "subtitle": "A shared in-game settings menu for BepInEx mods.",
+  "description": "Adds a Mods section to the native Stranded Deep settings UI and lets other mods register user-facing options in one consistent interface.",
+  "features": [
+    "Integrates into the native Stranded Deep settings screen as a Mods section.",
+    "Supports four control types: Slider, Toggle, Choice and Button.",
+    "Each client mod remains the owner of its ConfigEntry values, state and validation.",
+    "Mod Settings owns the registry, renderer and UI, not another mod's data.",
+    "The client SDK uses a soft dependency and reflection bridge through the BepInEx Chainloader.",
+    "A correctly integrated client mod can keep its core functionality when Mod Settings is absent.",
+    "Mod sections can define stable IDs, display names and ordering.",
+    "UI Scaler already uses the shared menu for its interface scale control."
+  ],
+  "screenshotCaptions": {},
+  "faq": [
+    {
+      "question": "Does Mod Settings own other mods' configuration values?",
+      "answer": "No. The client mod remains the source of truth and exposes getters and setters to the UI host."
+    },
+    {
+      "question": "Which controls are supported?",
+      "answer": "Slider, Toggle, Choice and Button."
+    },
+    {
+      "question": "Do client mods need a hard dependency?",
+      "answer": "No. The intended integration uses a soft dependency and the SDK bridge."
+    },
+    {
+      "question": "Does every mod need to build its own Unity settings UI?",
+      "answer": "Not for normal user-facing settings. The host renders registered controls in a shared native-style menu."
+    },
+    {
+      "question": "Is there a field-tested integration?",
+      "answer": "Yes. UI Scaler uses Mod Settings for its interface scale setting."
+    }
+  ],
+  "changelog": []
+}

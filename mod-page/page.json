@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "mod-settings",
+  "defaultLocale": "en",
+  "locales": {
+    "en": "en.json",
+    "ru": "ru.json"
+  },
+  "media": {
+    "cover": "media/cover.jpg",
+    "screenshots": []
+  },
+  "tags": [
+    "settings",
+    "ui",
+    "ingame_settings",
+    "localization",
+    "quality_of_life"
+  ],
+  "highlights": [
+    "ingame_settings",
+    "ui"
+  ]
+}
