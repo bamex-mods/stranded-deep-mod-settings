@@ -1,12 +1,12 @@
-﻿{
+{
     "schemaVersion":  1,
     "id":  "mod-settings",
     "name":  "Stranded Deep Mod Settings",
-    "version":  "0.2.1",
+    "version":  "0.3.1",
     "artifactBaseName":  "StrandedDeepModSettings",
     "type":  "core",
     "category":  "core",
-    "description":  "Общее внутриигровое меню настроек для BepInEx-модов Stranded Deep.",
+    "description":  "Shared in-game settings UI for Stranded Deep BepInEx mods with automatic RU/EN localization and isolated native/MODS panels.",
     "bepInExGuid":  "com.bamex.strandeddeep.modsettings",
     "packagePaths":  [
                          "BepInEx/plugins/StrandedDeepModSettings"
@@ -37,7 +37,7 @@
                     },
     "publishing":  {
                        "repository":  "stranded-deep-mod-settings",
-                       "tag":  "v0.2.1",
+                       "tag":  "v0.3.1",
                        "releaseChannel":  "stable"
                    }
 }

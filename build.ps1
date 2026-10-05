@@ -1,6 +1,12 @@
+param(
+    [string]$GameRoot = $env:STRANDED_DEEP_GAME_ROOT
+)
+
 $ErrorActionPreference = "Stop"
 
-$GameRoot = "F:\SteamLibrary\steamapps\common\Stranded Deep"
+if ([string]::IsNullOrWhiteSpace($GameRoot)) {
+    throw "GameRoot was not supplied. Pass -GameRoot or set STRANDED_DEEP_GAME_ROOT."
+}
 $Managed = Join-Path $GameRoot "Stranded_Deep_Data\Managed"
 $BepInExCore = Join-Path $GameRoot "BepInEx\core"
 $Compiler = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
@@ -43,7 +49,7 @@ $Args.Add("/out:$Output")
 foreach ($Ref in $Refs) { $Args.Add("/reference:$Ref") }
 $Args.Add($Source)
 
-Write-Host "=== BUILD StrandedDeepModSettings v0.2.1 ==="
+Write-Host "=== BUILD StrandedDeepModSettings v0.3.1 ==="
 Write-Host "Workspace: $PSScriptRoot"
 Write-Host "References: $($Refs.Count)"
 & $Compiler $Args.ToArray()

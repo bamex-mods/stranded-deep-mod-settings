@@ -20,7 +20,8 @@ namespace StrandedDeepModSettings
     internal class ModSettingDefinition
     {
         public string Id;
-        public string Label;
+        public string LabelRussian;
+        public string LabelEnglish;
         public int Order;
         public ModSettingKind Kind;
 
@@ -28,28 +29,34 @@ namespace StrandedDeepModSettings
         public float Max;
         public float Step;
         public float DisplayMultiplier;
-        public string Suffix;
+        public string SuffixRussian;
+        public string SuffixEnglish;
         public int Decimals;
         public Func<float> FloatGetter;
         public Action<float> FloatSetter;
 
-        public string OnText;
-        public string OffText;
+        public string OnTextRussian;
+        public string OnTextEnglish;
+        public string OffTextRussian;
+        public string OffTextEnglish;
         public Func<bool> BoolGetter;
         public Action<bool> BoolSetter;
 
-        public string[] Choices;
+        public string[] ChoicesRussian;
+        public string[] ChoicesEnglish;
         public Func<int> ChoiceGetter;
         public Action<int> ChoiceSetter;
 
-        public string ActionText;
+        public string ActionTextRussian;
+        public string ActionTextEnglish;
         public Action ButtonAction;
     }
 
     internal class ModDefinition
     {
         public string Id;
-        public string DisplayName;
+        public string DisplayNameRussian;
+        public string DisplayNameEnglish;
         public int Order;
         public readonly List<ModSettingDefinition> Settings =
             new List<ModSettingDefinition>();
@@ -68,9 +75,26 @@ namespace StrandedDeepModSettings
             get { return _registryVersion; }
         }
 
+        // v0.2 compatibility API. A single supplied text is used for both
+        // languages so existing client mods continue to work unchanged.
         public static void RegisterMod(
             string modId,
             string displayName,
+            int order)
+        {
+            RegisterModLocalized(
+                modId,
+                displayName,
+                displayName,
+                order);
+        }
+
+        // v0.3 bilingual API. The host follows the language already rendered
+        // by the native Stranded Deep Options UI (RU/EN).
+        public static void RegisterModLocalized(
+            string modId,
+            string displayNameRussian,
+            string displayNameEnglish,
             int order)
         {
             if (String.IsNullOrEmpty(modId))
@@ -85,10 +109,17 @@ namespace StrandedDeepModSettings
                 _mods.Add(modId, mod);
             }
 
-            mod.DisplayName =
-                String.IsNullOrEmpty(displayName)
-                ? modId
-                : displayName;
+            mod.DisplayNameRussian =
+                FirstNonEmpty(
+                    displayNameRussian,
+                    displayNameEnglish,
+                    modId);
+
+            mod.DisplayNameEnglish =
+                FirstNonEmpty(
+                    displayNameEnglish,
+                    displayNameRussian,
+                    modId);
 
             mod.Order = order;
             Touch();
@@ -108,11 +139,45 @@ namespace StrandedDeepModSettings
             Func<float> getter,
             Action<float> setter)
         {
+            AddSliderLocalized(
+                modId,
+                settingId,
+                label,
+                label,
+                order,
+                min,
+                max,
+                step,
+                displayMultiplier,
+                suffix,
+                suffix,
+                decimals,
+                getter,
+                setter);
+        }
+
+        public static void AddSliderLocalized(
+            string modId,
+            string settingId,
+            string labelRussian,
+            string labelEnglish,
+            int order,
+            float min,
+            float max,
+            float step,
+            float displayMultiplier,
+            string suffixRussian,
+            string suffixEnglish,
+            int decimals,
+            Func<float> getter,
+            Action<float> setter)
+        {
             ModSettingDefinition setting =
                 NewSetting(
                     modId,
                     settingId,
-                    label,
+                    labelRussian,
+                    labelEnglish,
                     order,
                     ModSettingKind.Slider);
 
@@ -124,8 +189,11 @@ namespace StrandedDeepModSettings
                 ? 1f
                 : displayMultiplier;
 
-            setting.Suffix =
-                suffix ?? "";
+            setting.SuffixRussian =
+                suffixRussian ?? "";
+
+            setting.SuffixEnglish =
+                suffixEnglish ?? "";
 
             setting.Decimals =
                 decimals < 0 ? 0 : decimals;
@@ -148,23 +216,75 @@ namespace StrandedDeepModSettings
             Func<bool> getter,
             Action<bool> setter)
         {
-            ModSettingDefinition setting =
-                NewSetting(
-                    modId,
-                    settingId,
-                    label,
-                    order,
-                    ModSettingKind.Toggle);
-
-            setting.OnText =
+            string normalizedOn =
                 String.IsNullOrEmpty(onText)
                 ? "Вкл."
                 : onText;
 
-            setting.OffText =
+            string normalizedOff =
                 String.IsNullOrEmpty(offText)
                 ? "Выкл."
                 : offText;
+
+            AddToggleLocalized(
+                modId,
+                settingId,
+                label,
+                label,
+                order,
+                normalizedOn,
+                normalizedOn,
+                normalizedOff,
+                normalizedOff,
+                getter,
+                setter);
+        }
+
+        public static void AddToggleLocalized(
+            string modId,
+            string settingId,
+            string labelRussian,
+            string labelEnglish,
+            int order,
+            string onTextRussian,
+            string onTextEnglish,
+            string offTextRussian,
+            string offTextEnglish,
+            Func<bool> getter,
+            Action<bool> setter)
+        {
+            ModSettingDefinition setting =
+                NewSetting(
+                    modId,
+                    settingId,
+                    labelRussian,
+                    labelEnglish,
+                    order,
+                    ModSettingKind.Toggle);
+
+            setting.OnTextRussian =
+                FirstNonEmpty(
+                    onTextRussian,
+                    onTextEnglish,
+                    "Вкл.");
+
+            setting.OnTextEnglish =
+                FirstNonEmpty(
+                    onTextEnglish,
+                    onTextRussian,
+                    "On");
+
+            setting.OffTextRussian =
+                FirstNonEmpty(
+                    offTextRussian,
+                    offTextEnglish,
+                    "Выкл.");
+
+            setting.OffTextEnglish =
+                FirstNonEmpty(
+                    offTextEnglish,
+                    offTextRussian,
+                    "Off");
 
             setting.BoolGetter = getter;
             setting.BoolSetter = setter;
@@ -183,17 +303,58 @@ namespace StrandedDeepModSettings
             Func<int> getter,
             Action<int> setter)
         {
+            AddChoiceLocalized(
+                modId,
+                settingId,
+                label,
+                label,
+                order,
+                choices,
+                choices,
+                getter,
+                setter);
+        }
+
+        public static void AddChoiceLocalized(
+            string modId,
+            string settingId,
+            string labelRussian,
+            string labelEnglish,
+            int order,
+            string[] choicesRussian,
+            string[] choicesEnglish,
+            Func<int> getter,
+            Action<int> setter)
+        {
+            string[] ru =
+                choicesRussian ?? new string[0];
+
+            string[] en =
+                choicesEnglish ?? new string[0];
+
+            if (ru.Length == 0 && en.Length > 0)
+                ru = en;
+
+            if (en.Length == 0 && ru.Length > 0)
+                en = ru;
+
+            if (ru.Length != en.Length)
+            {
+                throw new ArgumentException(
+                    "Localized choice arrays must have the same length.");
+            }
+
             ModSettingDefinition setting =
                 NewSetting(
                     modId,
                     settingId,
-                    label,
+                    labelRussian,
+                    labelEnglish,
                     order,
                     ModSettingKind.Choice);
 
-            setting.Choices =
-                choices ?? new string[0];
-
+            setting.ChoicesRussian = ru;
+            setting.ChoicesEnglish = en;
             setting.ChoiceGetter = getter;
             setting.ChoiceSetter = setter;
 
@@ -210,18 +371,52 @@ namespace StrandedDeepModSettings
             string actionText,
             Action action)
         {
+            string normalizedAction =
+                String.IsNullOrEmpty(actionText)
+                ? "Выполнить"
+                : actionText;
+
+            AddButtonLocalized(
+                modId,
+                settingId,
+                label,
+                label,
+                order,
+                normalizedAction,
+                normalizedAction,
+                action);
+        }
+
+        public static void AddButtonLocalized(
+            string modId,
+            string settingId,
+            string labelRussian,
+            string labelEnglish,
+            int order,
+            string actionTextRussian,
+            string actionTextEnglish,
+            Action action)
+        {
             ModSettingDefinition setting =
                 NewSetting(
                     modId,
                     settingId,
-                    label,
+                    labelRussian,
+                    labelEnglish,
                     order,
                     ModSettingKind.Button);
 
-            setting.ActionText =
-                String.IsNullOrEmpty(actionText)
-                ? "Выполнить"
-                : actionText;
+            setting.ActionTextRussian =
+                FirstNonEmpty(
+                    actionTextRussian,
+                    actionTextEnglish,
+                    "Выполнить");
+
+            setting.ActionTextEnglish =
+                FirstNonEmpty(
+                    actionTextEnglish,
+                    actionTextRussian,
+                    "Run");
 
             setting.ButtonAction = action;
 
@@ -266,8 +461,8 @@ namespace StrandedDeepModSettings
                         return order;
 
                     return String.Compare(
-                        a.DisplayName,
-                        b.DisplayName,
+                        a.Id,
+                        b.Id,
                         StringComparison.OrdinalIgnoreCase);
                 });
 
@@ -285,8 +480,8 @@ namespace StrandedDeepModSettings
                             return order;
 
                         return String.Compare(
-                            a.Label,
-                            b.Label,
+                            a.Id,
+                            b.Id,
                             StringComparison.OrdinalIgnoreCase);
                     });
             }
@@ -297,7 +492,8 @@ namespace StrandedDeepModSettings
         private static ModSettingDefinition NewSetting(
             string modId,
             string settingId,
-            string label,
+            string labelRussian,
+            string labelEnglish,
             int order,
             ModSettingKind kind)
         {
@@ -313,15 +509,36 @@ namespace StrandedDeepModSettings
                 new ModSettingDefinition();
 
             setting.Id = settingId;
-            setting.Label =
-                String.IsNullOrEmpty(label)
-                ? settingId
-                : label;
+            setting.LabelRussian =
+                FirstNonEmpty(
+                    labelRussian,
+                    labelEnglish,
+                    settingId);
+
+            setting.LabelEnglish =
+                FirstNonEmpty(
+                    labelEnglish,
+                    labelRussian,
+                    settingId);
 
             setting.Order = order;
             setting.Kind = kind;
 
             return setting;
+        }
+
+        private static string FirstNonEmpty(
+            string primary,
+            string secondary,
+            string fallback)
+        {
+            if (!String.IsNullOrEmpty(primary))
+                return primary;
+
+            if (!String.IsNullOrEmpty(secondary))
+                return secondary;
+
+            return fallback ?? "";
         }
 
         private static void EnsureMod(
@@ -334,7 +551,8 @@ namespace StrandedDeepModSettings
                 new ModDefinition();
 
             mod.Id = modId;
-            mod.DisplayName = modId;
+            mod.DisplayNameRussian = modId;
+            mod.DisplayNameEnglish = modId;
             mod.Order = 1000;
 
             _mods.Add(
@@ -494,7 +712,7 @@ namespace StrandedDeepModSettings
     [BepInPlugin(
         "com.bamex.strandeddeep.modsettings",
         "Stranded Deep Mod Settings",
-        "0.2.1")]
+        "0.3.1")]
     public class ModSettingsPlugin : BaseUnityPlugin
     {
         private const float ScanInterval = 0.50f;
@@ -508,6 +726,7 @@ namespace StrandedDeepModSettings
         private Transform _audioPanel;
         private Transform _inputPanel;
         private Transform _aboutPanel;
+        private Transform _generalButtonTransform;
 
         private Transform _sourceCategory;
         private Transform _sourceSlider;
@@ -525,11 +744,14 @@ namespace StrandedDeepModSettings
         private float _nextScanTime;
         private bool _wasOptionsActive;
         private int _builtRegistryVersion = -1;
+        private bool _languageInitialized;
+        private bool _useRussian;
+        private bool _panelOverlapLogged;
 
         private void Awake()
         {
             Logger.LogInfo(
-                "Stranded Deep Mod Settings API v0.2.1 loaded.");
+                "Stranded Deep Mod Settings API v0.3.1 loaded.");
 
             Logger.LogInfo(
                 "Waiting for the native Options menu.");
@@ -562,7 +784,11 @@ namespace StrandedDeepModSettings
             bool active =
                 _optionsRoot.gameObject.activeInHierarchy;
 
+            bool languageChanged =
+                RefreshLanguageFromNativeUi();
+
             if (
+                languageChanged ||
                 ModSettingsApi.RegistryVersion !=
                 _builtRegistryVersion
             )
@@ -579,6 +805,7 @@ namespace StrandedDeepModSettings
 
             if (active)
             {
+                EnforcePanelIsolation();
                 RefreshRuntimeControls();
             }
         }
@@ -715,6 +942,11 @@ namespace StrandedDeepModSettings
                 _optionsRoot =
                     optionsRoot;
 
+                _generalButtonTransform =
+                    generalButtonTransform;
+
+                RefreshLanguageFromNativeUi();
+
                 CreateModsButton(
                     buttonsGroup,
                     aboutButtonTransform);
@@ -761,6 +993,7 @@ namespace StrandedDeepModSettings
                 _modsButton =
                     existing.GetComponent<Button>();
 
+                UpdateModsButtonLabel();
                 return;
             }
 
@@ -786,7 +1019,10 @@ namespace StrandedDeepModSettings
             if (label != null)
             {
                 label.text =
-                    "МОДЫ";
+                    Localize(
+                        "МОДЫ",
+                        "MODS",
+                        "MODS");
             }
 
             _modsButton =
@@ -863,7 +1099,10 @@ namespace StrandedDeepModSettings
 
                 GameObject category =
                     CreateCategory(
-                        mod.DisplayName);
+                        Localize(
+                            mod.DisplayNameRussian,
+                            mod.DisplayNameEnglish,
+                            mod.Id));
 
                 foreach (
                     ModSettingDefinition setting
@@ -1040,7 +1279,10 @@ namespace StrandedDeepModSettings
             if (runtime.NameLabel != null)
             {
                 runtime.NameLabel.text =
-                    definition.Label;
+                    Localize(
+                        definition.LabelRussian,
+                        definition.LabelEnglish,
+                        definition.Id);
             }
 
             slider.onValueChanged.AddListener(
@@ -1140,7 +1382,10 @@ namespace StrandedDeepModSettings
             if (runtime.NameLabel != null)
             {
                 runtime.NameLabel.text =
-                    definition.Label;
+                    Localize(
+                        definition.LabelRussian,
+                        definition.LabelEnglish,
+                        definition.Id);
             }
 
             button.onClick.AddListener(
@@ -1224,8 +1469,7 @@ namespace StrandedDeepModSettings
                     if (
                         definition.ChoiceGetter == null ||
                         definition.ChoiceSetter == null ||
-                        definition.Choices == null ||
-                        definition.Choices.Length == 0
+                        GetLocalizedChoices(definition).Length == 0
                     )
                     {
                         return;
@@ -1238,7 +1482,7 @@ namespace StrandedDeepModSettings
 
                     if (
                         index >=
-                        definition.Choices.Length
+                        GetLocalizedChoices(definition).Length
                     )
                     {
                         index = 0;
@@ -1320,7 +1564,10 @@ namespace StrandedDeepModSettings
                     {
                         SetValueText(
                             runtime,
-                            "НЕТ");
+                            Localize(
+                                "НЕТ",
+                                "N/A",
+                                "N/A"));
 
                         return;
                     }
@@ -1379,7 +1626,10 @@ namespace StrandedDeepModSettings
                     {
                         SetValueText(
                             runtime,
-                            "НЕТ");
+                            Localize(
+                                "НЕТ",
+                                "N/A",
+                                "N/A"));
 
                         return;
                     }
@@ -1390,8 +1640,14 @@ namespace StrandedDeepModSettings
                     SetValueText(
                         runtime,
                         value
-                        ? definition.OnText
-                        : definition.OffText);
+                        ? Localize(
+                            definition.OnTextRussian,
+                            definition.OnTextEnglish,
+                            "On")
+                        : Localize(
+                            definition.OffTextRussian,
+                            definition.OffTextEnglish,
+                            "Off"));
 
                     return;
                 }
@@ -1404,8 +1660,7 @@ namespace StrandedDeepModSettings
                     bool valid =
                         definition.ChoiceGetter != null &&
                         definition.ChoiceSetter != null &&
-                        definition.Choices != null &&
-                        definition.Choices.Length > 0;
+                        GetLocalizedChoices(definition).Length > 0;
 
                     if (runtime.Button != null)
                     {
@@ -1417,7 +1672,10 @@ namespace StrandedDeepModSettings
                     {
                         SetValueText(
                             runtime,
-                            "НЕТ");
+                            Localize(
+                                "НЕТ",
+                                "N/A",
+                                "N/A"));
 
                         return;
                     }
@@ -1430,16 +1688,16 @@ namespace StrandedDeepModSettings
 
                     if (
                         index >=
-                        definition.Choices.Length
+                        GetLocalizedChoices(definition).Length
                     )
                     {
                         index =
-                            definition.Choices.Length - 1;
+                            GetLocalizedChoices(definition).Length - 1;
                     }
 
                     SetValueText(
                         runtime,
-                        definition.Choices[index]);
+                        GetLocalizedChoices(definition)[index]);
 
                     return;
                 }
@@ -1457,7 +1715,10 @@ namespace StrandedDeepModSettings
 
                     SetValueText(
                         runtime,
-                        definition.ActionText);
+                        Localize(
+                            definition.ActionTextRussian,
+                            definition.ActionTextEnglish,
+                            "Run"));
                 }
             }
             catch (Exception ex)
@@ -1530,7 +1791,10 @@ namespace StrandedDeepModSettings
                     CultureInfo.CurrentCulture);
 
             return text +
-                definition.Suffix;
+                Localize(
+                    definition.SuffixRussian,
+                    definition.SuffixEnglish,
+                    "");
         }
 
         private void HookNativeButtons(
@@ -1631,6 +1895,45 @@ namespace StrandedDeepModSettings
             RebuildAndScrollTop();
         }
 
+        private void EnforcePanelIsolation()
+        {
+            if (
+                _modsPanel == null ||
+                !_modsPanel.activeSelf
+            )
+            {
+                _panelOverlapLogged = false;
+                return;
+            }
+
+            foreach (Transform panel in _nativePanels)
+            {
+                if (
+                    panel == null ||
+                    !panel.gameObject.activeSelf
+                )
+                {
+                    continue;
+                }
+
+                _modsPanel.SetActive(false);
+
+                if (!_panelOverlapLogged)
+                {
+                    Logger.LogWarning(
+                        "Native Options panel became active while MODS was active; " +
+                        "hiding MODS panel to prevent mixed scroll content.");
+
+                    _panelOverlapLogged = true;
+                }
+
+                RebuildAndScrollTop();
+                return;
+            }
+
+            _panelOverlapLogged = false;
+        }
+
         private void OnOptionsOpened()
         {
             if (_modsPanel != null)
@@ -1660,8 +1963,139 @@ namespace StrandedDeepModSettings
                 _generalPanel.gameObject.SetActive(true);
             }
 
+            if (RefreshLanguageFromNativeUi())
+            {
+                RebuildModsPanel();
+                return;
+            }
+
             RefreshRuntimeControls();
             RebuildAndScrollTop();
+        }
+
+        private bool RefreshLanguageFromNativeUi()
+        {
+            if (_generalButtonTransform == null)
+                return false;
+
+            TMP_Text label =
+                FindFirstText(
+                    _generalButtonTransform);
+
+            if (label == null || String.IsNullOrEmpty(label.text))
+                return false;
+
+            bool russian =
+                ContainsCyrillic(label.text);
+
+            bool changed =
+                !_languageInitialized ||
+                russian != _useRussian;
+
+            if (!changed)
+                return false;
+
+            _languageInitialized = true;
+            _useRussian = russian;
+
+            UpdateModsButtonLabel();
+
+            Logger.LogInfo(
+                "Options language detected: " +
+                (_useRussian ? "RU" : "EN") +
+                ".");
+
+            return true;
+        }
+
+        private void UpdateModsButtonLabel()
+        {
+            if (_modsButton == null)
+                return;
+
+            TMP_Text label =
+                FindFirstText(
+                    _modsButton.transform);
+
+            if (label != null)
+            {
+                label.text =
+                    Localize(
+                        "МОДЫ",
+                        "MODS",
+                        "MODS");
+            }
+        }
+
+        private string Localize(
+            string russian,
+            string english,
+            string fallback)
+        {
+            string primary =
+                _useRussian
+                ? russian
+                : english;
+
+            string secondary =
+                _useRussian
+                ? english
+                : russian;
+
+            if (!String.IsNullOrEmpty(primary))
+                return primary;
+
+            if (!String.IsNullOrEmpty(secondary))
+                return secondary;
+
+            return fallback ?? "";
+        }
+
+        private string[] GetLocalizedChoices(
+            ModSettingDefinition definition)
+        {
+            if (definition == null)
+                return new string[0];
+
+            string[] primary =
+                _useRussian
+                ? definition.ChoicesRussian
+                : definition.ChoicesEnglish;
+
+            string[] secondary =
+                _useRussian
+                ? definition.ChoicesEnglish
+                : definition.ChoicesRussian;
+
+            if (primary != null && primary.Length > 0)
+                return primary;
+
+            if (secondary != null)
+                return secondary;
+
+            return new string[0];
+        }
+
+        private bool ContainsCyrillic(
+            string text)
+        {
+            if (String.IsNullOrEmpty(text))
+                return false;
+
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+
+                if (
+                    (c >= '\u0400' && c <= '\u04FF') ||
+                    (c >= '\u0500' && c <= '\u052F')
+                )
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void RebuildAndScrollTop()

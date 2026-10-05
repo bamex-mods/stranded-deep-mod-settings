@@ -1,3 +1,21 @@
+v0.3.1
+------
+- Fixed a regression where MODS content could remain active together with a native Options panel and become visible below GENERAL when scrolling.
+- Added a runtime panel-isolation invariant: any active native Options panel forces Options - Mods inactive.
+- Preserved v0.3.0 RU/EN localization and v0.2.1 selection auto-scroll.
+- No public API changes.
+- No SDK changes.
+- UI Scaler is unchanged.
+
+v0.3.0
+------
+- Added automatic RU/EN localization following the native Stranded Deep Options UI language.
+- MODS tab now renders as МОДЫ in Russian and MODS in English/non-Russian UI.
+- Added backward-compatible bilingual API methods: RegisterModLocalized, AddSliderLocalized, AddToggleLocalized, AddChoiceLocalized and AddButtonLocalized.
+- Existing v0.2 client registrations remain supported unchanged.
+- Updated authoritative SDK\ModSettingsClient.cs with localized calls and v0.2 fallback.
+- Preserved v0.2.1 controller/keyboard auto-scroll behavior.
+
 v0.2.1
 ------
 - Fixed MODS page not scrolling when controller/keyboard selection moves beyond the visible ScrollRect viewport.

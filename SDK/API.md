@@ -1,37 +1,34 @@
-# Stranded Deep Mod Settings API v0.2
+# Stranded Deep Mod Settings API v0.3
 
-This is the shared UI host for our custom Stranded Deep BepInEx mods.
+This is the shared native-style Options UI host for our Stranded Deep BepInEx mods.
 
 Core rule
 ---------
 
 The Mod Settings plugin owns UI only.
+Each client mod owns its own ConfigEntry/state, validation, persistence and runtime behavior.
 
-Each mod owns its own data/configuration.
+Client mods do not compile against StrandedDeepModSettings.dll.
+They vendor SDK\ModSettingsClient.cs and use a SoftDependency. The helper discovers the host at runtime through BepInEx Chainloader + reflection.
 
-Example:
+If StrandedDeepModSettings is absent, the client mod must still load and work; only the Settings -> MODS integration is unavailable.
 
-UI Scaler
-  owns ConfigEntry<float> Scale
+Language model in v0.3
+----------------------
 
-StrandedDeepModSettings
-  renders a slider
-  calls getter/setter delegates supplied by UI Scaler
+The host follows the language already rendered by the native Stranded Deep Options UI.
 
-If StrandedDeepModSettings is absent:
-  UI Scaler still loads
-  UI Scaler still applies its BepInEx config
-  only the in-game MODS page is unavailable
+For the supported bilingual API:
 
-There is no hard assembly reference from client mods to the host API.
-Client mods compile ModSettingsClient.cs into their own DLL.
-That helper discovers the API at runtime through BepInEx Chainloader and
-reflection.
+Russian game UI -> Russian registered strings
+English/non-Russian game UI -> English registered strings
 
-This keeps the dependency soft and reversible.
+The host does not add a separate language setting.
 
-Public host API
----------------
+The v0.2 single-language API remains available and binary/source compatible. Existing client mods continue to work unchanged, but their single registered string is shown in both game languages. To get automatic RU/EN switching, migrate the client to the *Localized methods below.
+
+Public compatibility API (v0.2)
+-------------------------------
 
 RegisterMod(
     string modId,
@@ -79,136 +76,176 @@ AddButton(
     string actionText,
     Action action)
 
-RemoveMod(
-    string modId)
+RemoveMod(string modId)
+
+Bilingual API (v0.3)
+--------------------
+
+RegisterModLocalized(
+    string modId,
+    string displayNameRussian,
+    string displayNameEnglish,
+    int order)
+
+AddSliderLocalized(
+    string modId,
+    string settingId,
+    string labelRussian,
+    string labelEnglish,
+    int order,
+    float min,
+    float max,
+    float step,
+    float displayMultiplier,
+    string suffixRussian,
+    string suffixEnglish,
+    int decimals,
+    Func<float> getter,
+    Action<float> setter)
+
+AddToggleLocalized(
+    string modId,
+    string settingId,
+    string labelRussian,
+    string labelEnglish,
+    int order,
+    string onTextRussian,
+    string onTextEnglish,
+    string offTextRussian,
+    string offTextEnglish,
+    Func<bool> getter,
+    Action<bool> setter)
+
+AddChoiceLocalized(
+    string modId,
+    string settingId,
+    string labelRussian,
+    string labelEnglish,
+    int order,
+    string[] choicesRussian,
+    string[] choicesEnglish,
+    Func<int> getter,
+    Action<int> setter)
+
+The RU and EN choice arrays must contain the same number of elements.
+
+AddButtonLocalized(
+    string modId,
+    string settingId,
+    string labelRussian,
+    string labelEnglish,
+    int order,
+    string actionTextRussian,
+    string actionTextEnglish,
+    Action action)
 
 Client integration
 ------------------
 
-Copy:
+Copy the authoritative helper:
 
 SDK\ModSettingsClient.cs
 
-into the source set of the client mod.
+into the client mod source tree.
 
-Add a soft BepInEx dependency:
+Recommended BepInEx dependency:
 
 [BepInDependency(
     "com.bamex.strandeddeep.modsettings",
     BepInDependency.DependencyFlags.SoftDependency)]
 
-Then register settings from Awake() or shortly after.
+Example bilingual slider
+------------------------
 
-Example slider
---------------
-
-ModSettingsClient.RegisterMod(
+ModSettingsClient.RegisterModLocalized(
     "example",
-    "Пример",
+    "Интерфейс",
+    "Interface",
     500);
 
-ModSettingsClient.AddSlider(
+ModSettingsClient.AddSliderLocalized(
     "example",
     "scale",
-    "Масштаб",
+    "Масштаб интерфейса",
+    "UI Scale",
     100,
     1.0f,
     2.0f,
     0.1f,
     100.0f,
     "%",
+    "%",
     0,
     GetScale,
     SetScale);
 
-Example toggle
---------------
+Example bilingual toggle
+------------------------
 
-ModSettingsClient.AddToggle(
+ModSettingsClient.AddToggleLocalized(
     "example",
     "enabled",
     "Включено",
+    "Enabled",
     200,
     "Вкл.",
+    "On",
     "Выкл.",
+    "Off",
     GetEnabled,
     SetEnabled);
 
-Example choice
---------------
+Example bilingual choice
+------------------------
 
-string[] choices = new string[]
+string[] choicesRu = new string[]
 {
     "Низко",
     "Средне",
     "Высоко"
 };
 
-ModSettingsClient.AddChoice(
+string[] choicesEn = new string[]
+{
+    "Low",
+    "Medium",
+    "High"
+};
+
+ModSettingsClient.AddChoiceLocalized(
     "example",
     "quality",
     "Качество",
+    "Quality",
     300,
-    choices,
+    choicesRu,
+    choicesEn,
     GetQualityIndex,
     SetQualityIndex);
 
-Example action button
----------------------
+Example bilingual action
+------------------------
 
-ModSettingsClient.AddButton(
+ModSettingsClient.AddButtonLocalized(
     "example",
     "reset",
     "Сбросить настройки",
+    "Reset settings",
     900,
     "Сбросить",
+    "Reset",
     ResetSettings);
+
+Backward compatibility behavior
+-------------------------------
+
+The v0.3 ModSettingsClient helper tries the new localized host method first.
+If it is running with an older v0.2 host that does not expose that method, the helper falls back to the old single-language call using the Russian text. This preserves soft dependency and allows client mods to remain functional during staged upgrades.
 
 Rendering model
 ---------------
 
-Each registered mod currently becomes one category/header inside:
+Each registered mod becomes a native category/header inside Settings -> MODS.
+The page uses the game's existing Options Canvas, ScrollRect, TMP fonts, category header, slider/button templates, animations and layout.
 
-Settings -> MODS
-
-For example:
-
-MODS
-
-ИНТЕРФЕЙС
-  Масштаб интерфейса          150%
-
-КАРТА
-  Размер стрелки              120%
-  Метки                       Вкл.
-
-BETTER MEAT
-  ...
-
-The page uses native Stranded Deep UI assets:
-- existing Options Canvas
-- existing ScrollRect
-- native TMP fonts
-- native category header
-- native option slider
-- native option button
-- native animations/layout
-
-The API registry can change at runtime.
-The host watches RegistryVersion and rebuilds the MODS page when a mod
-registers or replaces settings.
-
-v0.2 first client
------------------
-
-StrandedDeepUIScaler v0.3.0 is included in this package and is the first
-real API client.
-
-The old direct reflection from the menu host into UI Scaler._scale is gone.
-
-Now ownership is correct:
-
-UI Scaler -> registers itself -> menu host displays it.
-
-The UI Scaler F6/F7/F8 shortcuts are removed in v0.3.0.
-The BepInEx config remains the fallback when the menu host is absent.
+The host watches RegistryVersion and rebuilds the page when registrations change. Since v0.2.1, selected controls also auto-scroll into view for controller/keyboard navigation.
