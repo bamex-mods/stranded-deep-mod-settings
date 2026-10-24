@@ -14,7 +14,8 @@ namespace StrandedDeepModSettings
         Slider = 0,
         Toggle = 1,
         Choice = 2,
-        Button = 3
+        Button = 3,
+        Header = 4
     }
 
     internal class ModSettingDefinition
@@ -425,6 +426,41 @@ namespace StrandedDeepModSettings
                 setting);
         }
 
+        public static void AddHeader(
+            string modId,
+            string headerId,
+            string title,
+            int order)
+        {
+            AddHeaderLocalized(
+                modId,
+                headerId,
+                title,
+                title,
+                order);
+        }
+
+        public static void AddHeaderLocalized(
+            string modId,
+            string headerId,
+            string titleRussian,
+            string titleEnglish,
+            int order)
+        {
+            ModSettingDefinition header =
+                NewSetting(
+                    modId,
+                    headerId,
+                    titleRussian,
+                    titleEnglish,
+                    order,
+                    ModSettingKind.Header);
+
+            UpsertSetting(
+                modId,
+                header);
+        }
+
         public static void RemoveMod(
             string modId)
         {
@@ -573,10 +609,9 @@ namespace StrandedDeepModSettings
                 i++)
             {
                 if (
-                    String.Equals(
-                        mod.Settings[i].Id,
-                        setting.Id,
-                        StringComparison.OrdinalIgnoreCase)
+                    SameEntryIdentity(
+                        mod.Settings[i],
+                        setting)
                 )
                 {
                     mod.Settings[i] =
@@ -589,6 +624,32 @@ namespace StrandedDeepModSettings
 
             mod.Settings.Add(setting);
             Touch();
+        }
+
+        private static bool SameEntryIdentity(
+            ModSettingDefinition existing,
+            ModSettingDefinition incoming)
+        {
+            if (existing == null || incoming == null)
+                return false;
+
+            if (
+                existing.Kind == ModSettingKind.Header ||
+                incoming.Kind == ModSettingKind.Header
+            )
+            {
+                return
+                    existing.Kind == incoming.Kind &&
+                    String.Equals(
+                        existing.Id,
+                        incoming.Id,
+                        StringComparison.OrdinalIgnoreCase);
+            }
+
+            return String.Equals(
+                existing.Id,
+                incoming.Id,
+                StringComparison.OrdinalIgnoreCase);
         }
 
         private static void Touch()
@@ -709,13 +770,78 @@ namespace StrandedDeepModSettings
         }
     }
 
+    internal class ModSelectorRuntime
+    {
+        public string ModId;
+        public Button Button;
+        public TMP_Text Label;
+    }
+
+    internal class ModSelectorOnSelect : MonoBehaviour, ISelectHandler
+    {
+        private string _modId;
+        private Action<string> _callback;
+
+        public void Configure(
+            string modId,
+            Action<string> callback)
+        {
+            _modId = modId;
+            _callback = callback;
+        }
+
+        public void OnSelect(
+            BaseEventData eventData)
+        {
+            if (_callback != null)
+            {
+                _callback(_modId);
+            }
+        }
+    }
+
+    internal class ReturnToModSelectorOnCancel :
+        MonoBehaviour,
+        ICancelHandler
+    {
+        private Func<Selectable> _targetGetter;
+
+        public void Configure(
+            Func<Selectable> targetGetter)
+        {
+            _targetGetter = targetGetter;
+        }
+
+        public void OnCancel(
+            BaseEventData eventData)
+        {
+            if (_targetGetter == null)
+                return;
+
+            Selectable target =
+                _targetGetter();
+
+            if (target == null)
+                return;
+
+            target.Select();
+
+            if (eventData != null)
+                eventData.Use();
+        }
+    }
+
     [BepInPlugin(
         "com.bamex.strandeddeep.modsettings",
         "Stranded Deep Mod Settings",
-        "0.3.1")]
+        "0.4.3")]
     public class ModSettingsPlugin : BaseUnityPlugin
     {
         private const float ScanInterval = 0.50f;
+        private const float ModSelectorWidth = 250f;
+        private const float ModSelectorGap = 24f;
+        private const float ColumnDividerWidth = 2f;
+        private const string AllModsId = "__all__";
 
         private Transform _optionsRoot;
         private Transform _content;
@@ -738,7 +864,25 @@ namespace StrandedDeepModSettings
         private readonly List<RuntimeControl> _runtimeControls =
             new List<RuntimeControl>();
 
+        private readonly List<ModSelectorRuntime> _modSelectorButtons =
+            new List<ModSelectorRuntime>();
+
+        private readonly Dictionary<string, float> _settingsScrollPositions =
+            new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+
         private GameObject _modsPanel;
+        private GameObject _modSelectorRoot;
+        private GameObject _modSelectorDivider;
+        private Transform _modSelectorContent;
+        private ScrollRect _modSelectorScrollRect;
+        private RectTransform _optionsScrollRectTransform;
+        private Vector2 _optionsScrollOriginalAnchoredPosition;
+        private Vector2 _optionsScrollOriginalSizeDelta;
+        private bool _optionsScrollGeometryCaptured;
+        private bool _modsLayoutApplied;
+        private string _selectedModId = AllModsId;
+        private Navigation _modsButtonOriginalNavigation;
+        private bool _modsButtonNavigationCaptured;
         private Button _modsButton;
 
         private float _nextScanTime;
@@ -751,7 +895,7 @@ namespace StrandedDeepModSettings
         private void Awake()
         {
             Logger.LogInfo(
-                "Stranded Deep Mod Settings API v0.3.1 loaded.");
+                "Stranded Deep Mod Settings API v0.4.3 loaded.");
 
             Logger.LogInfo(
                 "Waiting for the native Options menu.");
@@ -952,6 +1096,7 @@ namespace StrandedDeepModSettings
                     aboutButtonTransform);
 
                 CreateEmptyModsPanel();
+                CreateModSelectorPanel();
 
                 HookNativeButtons(
                     buttonsGroup);
@@ -1079,19 +1224,87 @@ namespace StrandedDeepModSettings
             if (_modsPanel == null)
                 return;
 
+            List<ModDefinition> mods =
+                ModSettingsApi.GetSnapshot();
+
+            EnsureSelectedModStillExists(mods);
+            RebuildModSelector(mods);
+            RebuildSettingsContent(mods, true);
+
+            _builtRegistryVersion =
+                ModSettingsApi.RegistryVersion;
+
+            Logger.LogInfo(
+                "MODS UI rebuilt. Registered mods=" +
+                mods.Count +
+                ", filter=" +
+                _selectedModId +
+                ", controls=" +
+                _runtimeControls.Count +
+                ".");
+        }
+
+        private void EnsureSelectedModStillExists(
+            List<ModDefinition> mods)
+        {
+            if (
+                String.IsNullOrEmpty(_selectedModId) ||
+                String.Equals(
+                    _selectedModId,
+                    AllModsId,
+                    StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                _selectedModId = AllModsId;
+                return;
+            }
+
+            foreach (ModDefinition mod in mods)
+            {
+                if (
+                    mod != null &&
+                    String.Equals(
+                        mod.Id,
+                        _selectedModId,
+                        StringComparison.OrdinalIgnoreCase)
+                )
+                {
+                    return;
+                }
+            }
+
+            _selectedModId = AllModsId;
+        }
+
+        private void RebuildSettingsContent(
+            List<ModDefinition> mods,
+            bool preserveScroll)
+        {
+            if (_modsPanel == null)
+                return;
+
+            float previousScroll = 1f;
+
+            if (
+                preserveScroll &&
+                _scrollRect != null
+            )
+            {
+                previousScroll =
+                    _scrollRect.verticalNormalizedPosition;
+            }
+
             ClearChildrenImmediate(
                 _modsPanel.transform);
 
             _runtimeControls.Clear();
 
-            List<ModDefinition> mods =
-                ModSettingsApi.GetSnapshot();
-
             foreach (ModDefinition mod in mods)
             {
                 if (
                     mod == null ||
-                    mod.Settings.Count == 0
+                    mod.Settings.Count == 0 ||
+                    !ShouldRenderMod(mod.Id)
                 )
                 {
                     continue;
@@ -1108,23 +1321,1348 @@ namespace StrandedDeepModSettings
                     ModSettingDefinition setting
                     in mod.Settings)
                 {
-                    CreateSettingControl(
-                        category.transform,
-                        setting);
+                    if (setting == null)
+                        continue;
+
+                    if (
+                        setting.Kind ==
+                        ModSettingKind.Header
+                    )
+                    {
+                        CreateSubHeader(
+                            category.transform,
+                            setting);
+                    }
+                    else
+                    {
+                        CreateSettingControl(
+                            category.transform,
+                            setting);
+                    }
                 }
             }
 
-            _builtRegistryVersion =
-                ModSettingsApi.RegistryVersion;
+            RebuildLayouts();
 
-            RebuildAndScrollTop();
+            if (_scrollRect != null)
+            {
+                float targetScroll = 1f;
+                float stored;
+
+                if (
+                    preserveScroll &&
+                    _settingsScrollPositions.TryGetValue(
+                        _selectedModId,
+                        out stored)
+                )
+                {
+                    targetScroll = stored;
+                }
+                else if (preserveScroll)
+                {
+                    targetScroll = previousScroll;
+                }
+
+                _scrollRect.verticalNormalizedPosition =
+                    Mathf.Clamp01(targetScroll);
+            }
+
+            ConfigureColumnNavigation();
+        }
+
+        private bool ShouldRenderMod(
+            string modId)
+        {
+            return
+                String.Equals(
+                    _selectedModId,
+                    AllModsId,
+                    StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(
+                    _selectedModId,
+                    modId,
+                    StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void SelectModFilter(
+            string modId)
+        {
+            string normalized =
+                String.IsNullOrEmpty(modId)
+                ? AllModsId
+                : modId;
+
+            if (
+                String.Equals(
+                    normalized,
+                    _selectedModId,
+                    StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                return;
+            }
+
+            if (_scrollRect != null)
+            {
+                _settingsScrollPositions[_selectedModId] =
+                    _scrollRect.verticalNormalizedPosition;
+            }
+
+            float targetScroll = 1f;
+            float stored;
+
+            if (
+                _settingsScrollPositions.TryGetValue(
+                    normalized,
+                    out stored)
+            )
+            {
+                targetScroll = stored;
+            }
+
+            _selectedModId = normalized;
+
+            List<ModDefinition> mods =
+                ModSettingsApi.GetSnapshot();
+
+            EnsureSelectedModStillExists(mods);
+            RebuildSettingsContent(mods, false);
+
+            if (_scrollRect != null)
+            {
+                _scrollRect.verticalNormalizedPosition =
+                    Mathf.Clamp01(targetScroll);
+            }
 
             Logger.LogInfo(
-                "MODS page rebuilt. Registered mods=" +
-                mods.Count +
-                ", controls=" +
-                _runtimeControls.Count +
+                "MODS filter selected: " +
+                _selectedModId +
                 ".");
+        }
+
+        private void CreateModSelectorPanel()
+        {
+            if (
+                _scrollRect == null ||
+                _modsButton == null ||
+                _modSelectorRoot != null
+            )
+            {
+                return;
+            }
+
+            _optionsScrollRectTransform =
+                _scrollRect.GetComponent<RectTransform>();
+
+            if (_optionsScrollRectTransform == null)
+                return;
+
+            GameObject root =
+                new GameObject(
+                    "Mod Settings - Mod Selector",
+                    typeof(RectTransform),
+                    typeof(ScrollRect));
+
+            root.transform.SetParent(
+                _optionsScrollRectTransform.parent,
+                false);
+
+            RectTransform rootRect =
+                root.GetComponent<RectTransform>();
+
+            CopyRectTransformGeometry(
+                _optionsScrollRectTransform,
+                rootRect);
+
+            ScrollRect selectorScroll =
+                root.GetComponent<ScrollRect>();
+
+            selectorScroll.horizontal = false;
+            selectorScroll.vertical = true;
+            selectorScroll.movementType =
+                ScrollRect.MovementType.Clamped;
+            selectorScroll.inertia = true;
+            selectorScroll.scrollSensitivity = 28f;
+
+            GameObject viewport =
+                new GameObject(
+                    "Viewport",
+                    typeof(RectTransform),
+                    typeof(RectMask2D));
+
+            viewport.transform.SetParent(
+                root.transform,
+                false);
+
+            RectTransform viewportRect =
+                viewport.GetComponent<RectTransform>();
+
+            StretchToParent(viewportRect);
+
+            GameObject content =
+                new GameObject(
+                    "Content",
+                    typeof(RectTransform),
+                    typeof(VerticalLayoutGroup),
+                    typeof(ContentSizeFitter));
+
+            content.transform.SetParent(
+                viewport.transform,
+                false);
+
+            RectTransform contentRect =
+                content.GetComponent<RectTransform>();
+
+            contentRect.anchorMin =
+                new Vector2(0f, 1f);
+            contentRect.anchorMax =
+                new Vector2(1f, 1f);
+            contentRect.pivot =
+                new Vector2(0.5f, 1f);
+            contentRect.anchoredPosition =
+                Vector2.zero;
+            contentRect.sizeDelta =
+                new Vector2(0f, 0f);
+
+            VerticalLayoutGroup layout =
+                content.GetComponent<VerticalLayoutGroup>();
+
+            layout.padding =
+                new RectOffset(0, 8, 0, 0);
+            layout.spacing = 10f;
+            layout.childAlignment =
+                TextAnchor.UpperLeft;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+
+            ContentSizeFitter fitter =
+                content.GetComponent<ContentSizeFitter>();
+
+            fitter.horizontalFit =
+                ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit =
+                ContentSizeFitter.FitMode.PreferredSize;
+
+            selectorScroll.viewport =
+                viewportRect;
+            selectorScroll.content =
+                contentRect;
+
+            _modSelectorRoot = root;
+            _modSelectorScrollRect = selectorScroll;
+            _modSelectorContent = content.transform;
+
+            CreateColumnDivider();
+
+            root.SetActive(false);
+            if (_modSelectorDivider != null)
+                _modSelectorDivider.SetActive(false);
+        }
+
+        private void RebuildModSelector(
+            List<ModDefinition> mods)
+        {
+            if (_modSelectorContent == null)
+                return;
+
+            ClearChildrenImmediate(
+                _modSelectorContent);
+
+            _modSelectorButtons.Clear();
+
+            CreateModSelectorButton(
+                AllModsId,
+                Localize(
+                    "ВСЕ МОДЫ",
+                    "ALL MODS",
+                    "ALL MODS"));
+
+            foreach (ModDefinition mod in mods)
+            {
+                if (
+                    mod == null ||
+                    mod.Settings.Count == 0
+                )
+                {
+                    continue;
+                }
+
+                CreateModSelectorButton(
+                    mod.Id,
+                    Localize(
+                        mod.DisplayNameRussian,
+                        mod.DisplayNameEnglish,
+                        mod.Id));
+            }
+
+            RebuildSelectorLayout();
+            ConfigureColumnNavigation();
+        }
+
+        private void CreateModSelectorButton(
+            string modId,
+            string title)
+        {
+            if (
+                _modsButton == null ||
+                _modSelectorContent == null
+            )
+            {
+                return;
+            }
+
+            GameObject clone =
+                Instantiate(
+                    _modsButton.gameObject,
+                    _modSelectorContent,
+                    false);
+
+            clone.name =
+                "Button - Mod Selector - " +
+                modId;
+
+            DisableLocalizers(
+                clone.transform);
+
+            DisableBeamUiBehaviours(
+                clone);
+
+            Button button =
+                clone.GetComponent<Button>();
+
+            if (button == null)
+            {
+                DestroyImmediate(clone);
+                return;
+            }
+
+            button.onClick =
+                new Button.ButtonClickedEvent();
+
+            string capturedModId = modId;
+
+            button.onClick.AddListener(
+                delegate
+                {
+                    SelectModFilter(
+                        capturedModId);
+                });
+
+            TMP_Text label =
+                FindFirstText(
+                    clone.transform);
+
+            if (label != null)
+            {
+                label.text =
+                    title.ToUpper(
+                        CultureInfo.CurrentCulture);
+
+                ConfigureModSelectorLabel(
+                    label);
+            }
+
+            LayoutElement element =
+                clone.GetComponent<LayoutElement>();
+
+            if (element == null)
+            {
+                element =
+                    clone.AddComponent<LayoutElement>();
+            }
+
+            float currentHeight =
+                clone.GetComponent<RectTransform>() != null
+                ? clone.GetComponent<RectTransform>().rect.height
+                : 0f;
+
+            element.preferredHeight =
+                Mathf.Max(
+                    currentHeight,
+                    64f);
+            element.flexibleWidth = 1f;
+
+            ModSelectorOnSelect select =
+                clone.GetComponent<ModSelectorOnSelect>();
+
+            if (select == null)
+            {
+                select =
+                    clone.AddComponent<ModSelectorOnSelect>();
+            }
+
+            select.Configure(
+                modId,
+                SelectModFilter);
+
+            AttachAutoScroll(
+                clone,
+                _modSelectorScrollRect);
+
+            ModSelectorRuntime runtime =
+                new ModSelectorRuntime();
+
+            runtime.ModId = modId;
+            runtime.Button = button;
+            runtime.Label = label;
+
+            _modSelectorButtons.Add(
+                runtime);
+        }
+
+        private void ApplyModsColumnLayout()
+        {
+            if (
+                _modsLayoutApplied ||
+                _optionsScrollRectTransform == null ||
+                _modSelectorRoot == null
+            )
+            {
+                return;
+            }
+
+            _optionsScrollOriginalAnchoredPosition =
+                _optionsScrollRectTransform.anchoredPosition;
+
+            _optionsScrollOriginalSizeDelta =
+                _optionsScrollRectTransform.sizeDelta;
+
+            _optionsScrollGeometryCaptured = true;
+
+            RectTransform selectorRect =
+                _modSelectorRoot.GetComponent<RectTransform>();
+
+            if (selectorRect != null)
+            {
+                CopyRectTransformGeometry(
+                    _optionsScrollRectTransform,
+                    selectorRect);
+
+                SetRectWidthKeepingLeft(
+                    selectorRect,
+                    ModSelectorWidth);
+            }
+
+            PositionColumnDivider();
+
+            float shift =
+                ModSelectorWidth +
+                ModSelectorGap;
+
+            Vector2 size =
+                _optionsScrollOriginalSizeDelta;
+
+            size.x -= shift;
+
+            Vector2 position =
+                _optionsScrollOriginalAnchoredPosition;
+
+            position.x +=
+                (1f - _optionsScrollRectTransform.pivot.x) *
+                shift;
+
+            _optionsScrollRectTransform.sizeDelta = size;
+            _optionsScrollRectTransform.anchoredPosition = position;
+
+            _modSelectorRoot.SetActive(true);
+            if (_modSelectorDivider != null)
+                _modSelectorDivider.SetActive(true);
+
+            _modsLayoutApplied = true;
+
+            Canvas.ForceUpdateCanvases();
+
+            RectTransform selectorLogRect =
+                _modSelectorRoot.GetComponent<RectTransform>();
+
+            Logger.LogInfo(
+                "MODS three-column layout applied. selectorWidth=" +
+                (selectorLogRect != null
+                    ? selectorLogRect.rect.width.ToString("F1", CultureInfo.InvariantCulture)
+                    : "n/a") +
+                ", settingsWidth=" +
+                _optionsScrollRectTransform.rect.width.ToString(
+                    "F1",
+                    CultureInfo.InvariantCulture) +
+                ".");
+
+            ConfigureColumnNavigation();
+        }
+
+        private void RestoreNativeColumnLayout()
+        {
+            if (!_optionsScrollGeometryCaptured)
+                return;
+
+            if (_optionsScrollRectTransform != null)
+            {
+                _optionsScrollRectTransform.anchoredPosition =
+                    _optionsScrollOriginalAnchoredPosition;
+
+                _optionsScrollRectTransform.sizeDelta =
+                    _optionsScrollOriginalSizeDelta;
+            }
+
+            if (_modSelectorRoot != null)
+            {
+                _modSelectorRoot.SetActive(false);
+            }
+
+            if (_modSelectorDivider != null)
+            {
+                _modSelectorDivider.SetActive(false);
+            }
+
+            RestoreModsButtonNavigation();
+            _modsLayoutApplied = false;
+        }
+
+        private void ConfigureColumnNavigation()
+        {
+            if (_modSelectorButtons.Count == 0)
+                return;
+
+            Selectable firstRight =
+                GetFirstRuntimeSelectable();
+
+            for (
+                int i = 0;
+                i < _modSelectorButtons.Count;
+                i++)
+            {
+                ModSelectorRuntime current =
+                    _modSelectorButtons[i];
+
+                if (
+                    current == null ||
+                    current.Button == null
+                )
+                {
+                    continue;
+                }
+
+                Navigation navigation =
+                    new Navigation();
+
+                navigation.mode =
+                    Navigation.Mode.Explicit;
+
+                if (i > 0)
+                {
+                    navigation.selectOnUp =
+                        _modSelectorButtons[i - 1].Button;
+                }
+
+                if (
+                    i + 1 <
+                    _modSelectorButtons.Count
+                )
+                {
+                    navigation.selectOnDown =
+                        _modSelectorButtons[i + 1].Button;
+                }
+
+                navigation.selectOnLeft =
+                    _modsButton;
+
+                navigation.selectOnRight =
+                    firstRight;
+
+                current.Button.navigation =
+                    navigation;
+            }
+
+            ConfigureModsButtonRightNavigation();
+        }
+
+        private void ConfigureModsButtonRightNavigation()
+        {
+            if (
+                !_modsLayoutApplied ||
+                _modsButton == null ||
+                _modSelectorButtons.Count == 0
+            )
+            {
+                return;
+            }
+
+            if (!_modsButtonNavigationCaptured)
+            {
+                _modsButtonOriginalNavigation =
+                    _modsButton.navigation;
+                _modsButtonNavigationCaptured = true;
+            }
+
+            Transform buttonsGroup =
+                _modsButton.transform.parent;
+
+            Button previous =
+                FindSiblingButton(
+                    buttonsGroup,
+                    _modsButton.transform,
+                    -1);
+
+            Button next =
+                FindSiblingButton(
+                    buttonsGroup,
+                    _modsButton.transform,
+                    1);
+
+            Navigation navigation =
+                new Navigation();
+
+            navigation.mode =
+                Navigation.Mode.Explicit;
+            navigation.selectOnUp = previous;
+            navigation.selectOnDown = next;
+            navigation.selectOnRight =
+                GetSelectedModSelectorButton();
+
+            _modsButton.navigation = navigation;
+        }
+
+        private void RestoreModsButtonNavigation()
+        {
+            if (
+                _modsButton != null &&
+                _modsButtonNavigationCaptured
+            )
+            {
+                _modsButton.navigation =
+                    _modsButtonOriginalNavigation;
+            }
+        }
+
+        private Button FindSiblingButton(
+            Transform parent,
+            Transform current,
+            int direction)
+        {
+            if (parent == null || current == null)
+                return null;
+
+            int index =
+                current.GetSiblingIndex() + direction;
+
+            while (
+                index >= 0 &&
+                index < parent.childCount
+            )
+            {
+                Transform candidate =
+                    parent.GetChild(index);
+
+                if (
+                    candidate != null &&
+                    candidate.gameObject.activeInHierarchy
+                )
+                {
+                    Button button =
+                        candidate.GetComponent<Button>();
+
+                    if (button != null)
+                        return button;
+                }
+
+                index += direction;
+            }
+
+            return null;
+        }
+
+        private Button GetSelectedModSelectorButton()
+        {
+            foreach (
+                ModSelectorRuntime runtime
+                in _modSelectorButtons)
+            {
+                if (
+                    runtime != null &&
+                    runtime.Button != null &&
+                    String.Equals(
+                        runtime.ModId,
+                        _selectedModId,
+                        StringComparison.OrdinalIgnoreCase)
+                )
+                {
+                    return runtime.Button;
+                }
+            }
+
+            if (
+                _modSelectorButtons.Count > 0 &&
+                _modSelectorButtons[0] != null
+            )
+            {
+                return _modSelectorButtons[0].Button;
+            }
+
+            return null;
+        }
+
+        private Selectable GetFirstRuntimeSelectable()
+        {
+            foreach (
+                RuntimeControl runtime
+                in _runtimeControls)
+            {
+                if (runtime == null)
+                    continue;
+
+                if (runtime.Slider != null)
+                    return runtime.Slider;
+
+                if (runtime.Button != null)
+                    return runtime.Button;
+            }
+
+            return null;
+        }
+
+        private void AttachReturnToSelector(
+            GameObject control)
+        {
+            if (control == null)
+                return;
+
+            ReturnToModSelectorOnCancel helper =
+                control.GetComponent<ReturnToModSelectorOnCancel>();
+
+            if (helper == null)
+            {
+                helper =
+                    control.AddComponent<ReturnToModSelectorOnCancel>();
+            }
+
+            helper.Configure(
+                delegate
+                {
+                    return GetSelectedModSelectorButton();
+                });
+        }
+
+        private void CreateSubHeader(
+            Transform category,
+            ModSettingDefinition definition)
+        {
+            if (
+                category == null ||
+                definition == null ||
+                _sourceCategory == null
+            )
+            {
+                return;
+            }
+
+            bool firstSubHeader =
+                !HasRenderedSettingsElement(
+                    category);
+
+            CreateVerticalSpacer(
+                category,
+                firstSubHeader ? 4f : 18f,
+                "Before Header - " + definition.Id);
+
+            GameObject header =
+                Instantiate(
+                    _sourceCategory.gameObject,
+                    category,
+                    false);
+
+            header.name =
+                "Header - Mod - " +
+                definition.Id;
+
+            Transform headerTransform =
+                header.transform;
+
+            for (
+                int i =
+                    headerTransform.childCount - 1;
+                i >= 0;
+                i--)
+            {
+                Transform child =
+                    headerTransform.GetChild(i);
+
+                if (
+                    child.name.StartsWith(
+                        "Control - ",
+                        StringComparison.Ordinal)
+                )
+                {
+                    DestroyImmediate(
+                        child.gameObject);
+                }
+            }
+
+            DisableLocalizers(
+                headerTransform);
+
+            Transform titleObject =
+                FindDescendant(
+                    headerTransform,
+                    "Lable - Title");
+
+            if (titleObject == null)
+            {
+                titleObject =
+                    FindDescendant(
+                        headerTransform,
+                        "Label - Title");
+            }
+
+            if (titleObject != null)
+            {
+                TMP_Text text =
+                    titleObject.GetComponent<TMP_Text>();
+
+                if (text != null)
+                {
+                    text.text =
+                        Localize(
+                            definition.LabelRussian,
+                            definition.LabelEnglish,
+                            definition.Id)
+                            .ToUpper(
+                                CultureInfo.CurrentCulture);
+
+                    text.fontStyle =
+                        FontStyles.Bold;
+
+                    text.fontSize =
+                        text.fontSize * 0.80f;
+
+                    text.enableWordWrapping = true;
+                    text.overflowMode =
+                        TextOverflowModes.Overflow;
+                }
+            }
+
+            CanvasGroup group =
+                header.GetComponent<CanvasGroup>();
+
+            if (group == null)
+            {
+                group =
+                    header.AddComponent<CanvasGroup>();
+            }
+
+            group.alpha = 1f;
+            group.interactable = false;
+            group.blocksRaycasts = false;
+
+            CreateVerticalSpacer(
+                category,
+                5f,
+                "After Header - " + definition.Id);
+        }
+
+        private bool HasRenderedSettingsElement(
+            Transform category)
+        {
+            if (category == null)
+                return false;
+
+            for (int i = 0; i < category.childCount; i++)
+            {
+                Transform child =
+                    category.GetChild(i);
+
+                if (child == null)
+                    continue;
+
+                if (
+                    child.name.StartsWith(
+                        "Control - Mod - ",
+                        StringComparison.Ordinal) ||
+                    child.name.StartsWith(
+                        "Header - Mod - ",
+                        StringComparison.Ordinal)
+                )
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void CreateVerticalSpacer(
+            Transform parent,
+            float height,
+            string objectName)
+        {
+            if (
+                parent == null ||
+                height <= 0f
+            )
+            {
+                return;
+            }
+
+            GameObject spacer =
+                new GameObject(
+                    objectName,
+                    typeof(RectTransform),
+                    typeof(LayoutElement));
+
+            spacer.transform.SetParent(
+                parent,
+                false);
+
+            LayoutElement layout =
+                spacer.GetComponent<LayoutElement>();
+
+            layout.minHeight = height;
+            layout.preferredHeight = height;
+            layout.flexibleHeight = 0f;
+            layout.ignoreLayout = false;
+        }
+
+        private void CreateColumnDivider()
+        {
+            if (
+                _optionsScrollRectTransform == null ||
+                _modSelectorDivider != null
+            )
+            {
+                return;
+            }
+
+            GameObject divider =
+                new GameObject(
+                    "Mod Settings - Column Divider",
+                    typeof(RectTransform),
+                    typeof(Image));
+
+            divider.transform.SetParent(
+                _optionsScrollRectTransform.parent,
+                false);
+
+            Image dividerImage =
+                divider.GetComponent<Image>();
+
+            Transform sourceSeparator =
+                FindDescendant(
+                    _sourceCategory,
+                    "Image - Separator");
+
+            Image sourceImage =
+                sourceSeparator != null
+                ? sourceSeparator.GetComponent<Image>()
+                : null;
+
+            if (sourceImage != null)
+            {
+                dividerImage.sprite = sourceImage.sprite;
+                dividerImage.material = sourceImage.material;
+                dividerImage.type = sourceImage.type;
+
+                Color color = sourceImage.color;
+                color.a = Mathf.Clamp01(
+                    color.a * 0.70f);
+                dividerImage.color = color;
+            }
+            else
+            {
+                dividerImage.color =
+                    new Color(1f, 1f, 1f, 0.24f);
+            }
+
+            dividerImage.raycastTarget = false;
+
+            _modSelectorDivider = divider;
+        }
+
+        private void PositionColumnDivider()
+        {
+            if (
+                _modSelectorDivider == null ||
+                _optionsScrollRectTransform == null
+            )
+            {
+                return;
+            }
+
+            RectTransform dividerRect =
+                _modSelectorDivider.GetComponent<RectTransform>();
+
+            if (dividerRect == null)
+                return;
+
+            CopyRectTransformGeometry(
+                _optionsScrollRectTransform,
+                dividerRect);
+
+            SetRectWidthKeepingLeft(
+                dividerRect,
+                ColumnDividerWidth);
+
+            Vector2 position =
+                dividerRect.anchoredPosition;
+
+            position.x +=
+                ModSelectorWidth +
+                ((ModSelectorGap - ColumnDividerWidth) * 0.5f);
+
+            dividerRect.anchoredPosition = position;
+        }
+
+        private void ConfigureModSelectorLabel(
+            TMP_Text text)
+        {
+            if (text == null)
+                return;
+
+            // The middle MODS column is navigation, not a settings row.
+            // Give long mod names up to two visual lines instead of
+            // hiding them behind ellipsis. The viewport mask remains
+            // the final safety boundary for unusually long names.
+            text.enableWordWrapping = true;
+            text.overflowMode =
+                TextOverflowModes.Truncate;
+            text.maskable = true;
+            text.fontStyle = FontStyles.Normal;
+            text.fontSize =
+                text.fontSize * 0.82f;
+
+            Vector4 margin = text.margin;
+            margin.x = 0f;
+            margin.z = 0f;
+            text.margin = margin;
+
+            RectTransform textRect =
+                text.rectTransform;
+
+            if (textRect != null)
+            {
+                Vector2 min = textRect.offsetMin;
+
+                // Native Options buttons reserve a large left inset.
+                // It is useful in the stock first column but wastes
+                // space in our narrower mod-selector column.
+                min.x = Mathf.Max(
+                    8f,
+                    min.x - 52f);
+
+                textRect.offsetMin = min;
+            }
+
+            LayoutElement layout =
+                text.GetComponent<LayoutElement>();
+
+            if (layout == null)
+            {
+                layout =
+                    text.gameObject.AddComponent<LayoutElement>();
+            }
+
+            layout.minWidth = 0f;
+            layout.preferredWidth = 0f;
+            layout.flexibleWidth = 1f;
+        }
+
+        private void ConfigureWrappedSettingLabel(
+            GameObject control,
+            TMP_Text text)
+        {
+            if (
+                control == null ||
+                text == null
+            )
+            {
+                return;
+            }
+
+            text.enableWordWrapping = true;
+            text.overflowMode =
+                TextOverflowModes.Overflow;
+            text.maskable = true;
+
+            LayoutElement textLayout =
+                text.GetComponent<LayoutElement>();
+
+            if (textLayout == null)
+            {
+                textLayout =
+                    text.gameObject.AddComponent<LayoutElement>();
+            }
+
+            textLayout.minWidth = 0f;
+            textLayout.preferredWidth = 0f;
+            textLayout.flexibleWidth = 1f;
+
+            RectTransform controlRect =
+                control.GetComponent<RectTransform>();
+
+            RectTransform textRect =
+                text.rectTransform;
+
+            if (
+                controlRect == null ||
+                textRect == null
+            )
+            {
+                return;
+            }
+
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(
+                controlRect);
+
+            float availableWidth =
+                textRect.rect.width;
+
+            if (availableWidth <= 1f)
+                return;
+
+            text.ForceMeshUpdate();
+
+            int lineCount =
+                text.textInfo != null
+                ? Mathf.Max(1, text.textInfo.lineCount)
+                : 1;
+
+            Vector2 preferred =
+                text.GetPreferredValues(
+                    text.text,
+                    availableWidth,
+                    4096f);
+
+            float nativeTextHeight =
+                Mathf.Max(
+                    1f,
+                    textRect.rect.height);
+
+            float targetTextHeight =
+                Mathf.Max(
+                    nativeTextHeight,
+                    preferred.y);
+
+            if (lineCount > 1)
+            {
+                float lineHeight =
+                    Mathf.Max(
+                        text.fontSize * 1.15f,
+                        targetTextHeight / lineCount);
+
+                targetTextHeight =
+                    Mathf.Max(
+                        targetTextHeight,
+                        lineHeight * lineCount);
+            }
+
+            textLayout.minHeight =
+                targetTextHeight;
+            textLayout.preferredHeight =
+                targetTextHeight;
+            textLayout.flexibleHeight = 0f;
+
+            if (lineCount <= 1)
+                return;
+
+            LayoutElement rowLayout =
+                control.GetComponent<LayoutElement>();
+
+            if (rowLayout == null)
+            {
+                rowLayout =
+                    control.AddComponent<LayoutElement>();
+            }
+
+            float nativeRowHeight =
+                controlRect.rect.height;
+
+            if (rowLayout.preferredHeight > 0f)
+            {
+                nativeRowHeight =
+                    Mathf.Max(
+                        nativeRowHeight,
+                        rowLayout.preferredHeight);
+            }
+
+            float extraHeight =
+                Mathf.Max(
+                    0f,
+                    targetTextHeight - nativeTextHeight);
+
+            float targetRowHeight =
+                nativeRowHeight +
+                extraHeight +
+                6f;
+
+            rowLayout.minHeight =
+                targetRowHeight;
+            rowLayout.preferredHeight =
+                targetRowHeight;
+            rowLayout.flexibleHeight = 0f;
+        }
+
+        private void ConfigureCompactLabel(
+            TMP_Text text,
+            bool flexibleWidth)
+        {
+            if (text == null)
+                return;
+
+            text.enableWordWrapping = false;
+            text.overflowMode =
+                TextOverflowModes.Ellipsis;
+            text.maskable = true;
+
+            if (!flexibleWidth)
+                return;
+
+            LayoutElement layout =
+                text.GetComponent<LayoutElement>();
+
+            if (layout == null)
+            {
+                layout =
+                    text.gameObject.AddComponent<LayoutElement>();
+            }
+
+            layout.minWidth = 0f;
+            layout.preferredWidth = 0f;
+            layout.flexibleWidth = 1f;
+        }
+
+        private void CopyRectTransformGeometry(
+            RectTransform source,
+            RectTransform target)
+        {
+            target.anchorMin = source.anchorMin;
+            target.anchorMax = source.anchorMax;
+            target.pivot = source.pivot;
+            target.anchoredPosition =
+                source.anchoredPosition;
+            target.sizeDelta = source.sizeDelta;
+            target.localScale = Vector3.one;
+            target.localRotation = Quaternion.identity;
+        }
+
+        private void SetRectWidthKeepingLeft(
+            RectTransform rect,
+            float targetWidth)
+        {
+            if (rect == null)
+                return;
+
+            float currentWidth =
+                rect.rect.width;
+
+            if (currentWidth <= 0.01f)
+                currentWidth = targetWidth;
+
+            float delta =
+                targetWidth - currentWidth;
+
+            Vector2 size = rect.sizeDelta;
+            size.x += delta;
+            rect.sizeDelta = size;
+
+            Vector2 position =
+                rect.anchoredPosition;
+
+            position.x +=
+                rect.pivot.x * delta;
+
+            rect.anchoredPosition = position;
+        }
+
+        private void StretchToParent(
+            RectTransform rect)
+        {
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = Vector2.zero;
+        }
+
+        private void RebuildSelectorLayout()
+        {
+            if (_modSelectorContent == null)
+                return;
+
+            Canvas.ForceUpdateCanvases();
+
+            RectTransform rect =
+                _modSelectorContent.GetComponent<RectTransform>();
+
+            if (rect != null)
+            {
+                LayoutRebuilder.ForceRebuildLayoutImmediate(
+                    rect);
+            }
+
+            Canvas.ForceUpdateCanvases();
+        }
+
+        private void RebuildLayouts()
+        {
+            Canvas.ForceUpdateCanvases();
+
+            if (_content != null)
+            {
+                RectTransform rect =
+                    _content.GetComponent<RectTransform>();
+
+                if (rect != null)
+                {
+                    LayoutRebuilder.ForceRebuildLayoutImmediate(
+                        rect);
+                }
+            }
+
+            if (_modsPanel != null)
+            {
+                RectTransform rect =
+                    _modsPanel.GetComponent<RectTransform>();
+
+                if (rect != null)
+                {
+                    LayoutRebuilder.ForceRebuildLayoutImmediate(
+                        rect);
+                }
+            }
+
+            RebuildSelectorLayout();
+            Canvas.ForceUpdateCanvases();
+        }
+
+        private void DisableBeamUiBehaviours(
+            GameObject root)
+        {
+            if (root == null)
+                return;
+
+            Behaviour[] behaviours =
+                root.GetComponentsInChildren<Behaviour>(true);
+
+            foreach (Behaviour behaviour in behaviours)
+            {
+                if (behaviour == null)
+                    continue;
+
+                Type type = behaviour.GetType();
+
+                if (
+                    type.Namespace == null ||
+                    !type.Namespace.StartsWith(
+                        "Beam.UI",
+                        StringComparison.Ordinal)
+                )
+                {
+                    continue;
+                }
+
+                behaviour.enabled = false;
+                DestroyImmediate(behaviour);
+            }
         }
 
         private GameObject CreateCategory(
@@ -1199,6 +2737,14 @@ namespace StrandedDeepModSettings
             Transform category,
             ModSettingDefinition definition)
         {
+            if (
+                definition == null ||
+                definition.Kind == ModSettingKind.Header
+            )
+            {
+                return;
+            }
+
             if (
                 definition.Kind ==
                 ModSettingKind.Slider)
@@ -1283,6 +2829,17 @@ namespace StrandedDeepModSettings
                         definition.LabelRussian,
                         definition.LabelEnglish,
                         definition.Id);
+
+                ConfigureWrappedSettingLabel(
+                    control,
+                    runtime.NameLabel);
+            }
+
+            if (runtime.ValueLabel != null)
+            {
+                ConfigureCompactLabel(
+                    runtime.ValueLabel,
+                    false);
             }
 
             slider.onValueChanged.AddListener(
@@ -1320,6 +2877,7 @@ namespace StrandedDeepModSettings
                 });
 
             AttachAutoScroll(control);
+            AttachReturnToSelector(control);
 
             _runtimeControls.Add(runtime);
 
@@ -1386,6 +2944,17 @@ namespace StrandedDeepModSettings
                         definition.LabelRussian,
                         definition.LabelEnglish,
                         definition.Id);
+
+                ConfigureWrappedSettingLabel(
+                    control,
+                    runtime.NameLabel);
+            }
+
+            if (runtime.ValueLabel != null)
+            {
+                ConfigureCompactLabel(
+                    runtime.ValueLabel,
+                    false);
             }
 
             button.onClick.AddListener(
@@ -1396,6 +2965,7 @@ namespace StrandedDeepModSettings
                 });
 
             AttachAutoScroll(control);
+            AttachReturnToSelector(control);
 
             _runtimeControls.Add(runtime);
 
@@ -1406,9 +2976,18 @@ namespace StrandedDeepModSettings
         private void AttachAutoScroll(
             GameObject control)
         {
+            AttachAutoScroll(
+                control,
+                _scrollRect);
+        }
+
+        private void AttachAutoScroll(
+            GameObject control,
+            ScrollRect scrollRect)
+        {
             if (
                 control == null ||
-                _scrollRect == null
+                scrollRect == null
             )
             {
                 return;
@@ -1430,7 +3009,7 @@ namespace StrandedDeepModSettings
             }
 
             helper.Configure(
-                _scrollRect,
+                scrollRect,
                 target);
         }
 
@@ -1867,6 +3446,7 @@ namespace StrandedDeepModSettings
             }
 
             _modsPanel.SetActive(true);
+            ApplyModsColumnLayout();
 
             RefreshRuntimeControls();
             RebuildAndScrollTop();
@@ -1882,6 +3462,8 @@ namespace StrandedDeepModSettings
             {
                 _modsPanel.SetActive(false);
             }
+
+            RestoreNativeColumnLayout();
 
             foreach (Transform panel in _nativePanels)
             {
@@ -1917,6 +3499,7 @@ namespace StrandedDeepModSettings
                 }
 
                 _modsPanel.SetActive(false);
+                RestoreNativeColumnLayout();
 
                 if (!_panelOverlapLogged)
                 {
@@ -1940,6 +3523,8 @@ namespace StrandedDeepModSettings
             {
                 _modsPanel.SetActive(false);
             }
+
+            RestoreNativeColumnLayout();
 
             bool anyNativeActive = false;
 
@@ -2100,36 +3685,7 @@ namespace StrandedDeepModSettings
 
         private void RebuildAndScrollTop()
         {
-            Canvas.ForceUpdateCanvases();
-
-            if (_content != null)
-            {
-                RectTransform rect =
-                    _content.GetComponent<RectTransform>();
-
-                if (rect != null)
-                {
-                    LayoutRebuilder.ForceRebuildLayoutImmediate(
-                        rect);
-                }
-            }
-
-            if (
-                _modsPanel != null &&
-                _modsPanel.activeSelf
-            )
-            {
-                RectTransform rect =
-                    _modsPanel.GetComponent<RectTransform>();
-
-                if (rect != null)
-                {
-                    LayoutRebuilder.ForceRebuildLayoutImmediate(
-                        rect);
-                }
-            }
-
-            Canvas.ForceUpdateCanvases();
+            RebuildLayouts();
 
             if (_scrollRect != null)
             {

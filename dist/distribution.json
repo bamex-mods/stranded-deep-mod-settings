@@ -1,43 +1,39 @@
-{
-    "schemaVersion":  1,
-    "id":  "mod-settings",
-    "name":  "Stranded Deep Mod Settings",
-    "version":  "0.3.1",
-    "artifactBaseName":  "StrandedDeepModSettings",
-    "type":  "core",
-    "category":  "core",
-    "description":  "Shared in-game settings UI for Stranded Deep BepInEx mods with automatic RU/EN localization and isolated native/MODS panels.",
-    "bepInExGuid":  "com.bamex.strandeddeep.modsettings",
-    "packagePaths":  [
-                         "BepInEx/plugins/StrandedDeepModSettings"
-                     ],
-    "ownedPaths":  [
-                       "BepInEx/plugins/StrandedDeepModSettings"
-                   ],
-    "install":  {
-                    "restartRequired":  true
-                },
-    "dependencies":  [
-                         {
-                             "id":  "bepinex",
-                             "required":  true
-                         }
-                     ],
-    "optionalDependencies":  [
-
-                             ],
-    "conflicts":  [
-
-                  ],
-    "persistence":  {
-                        "usesBepInExConfig":  false,
-                        "usesGameSave":  false,
-                        "usesSidecarData":  false,
-                        "backupBeforeUpdate":  false
-                    },
-    "publishing":  {
-                       "repository":  "stranded-deep-mod-settings",
-                       "tag":  "v0.3.1",
-                       "releaseChannel":  "stable"
-                   }
+﻿{
+    "schemaVersion": 1,
+    "id": "mod-settings",
+    "name": "Stranded Deep Mod Settings",
+    "version": "0.4.3",
+    "artifactBaseName": "StrandedDeepModSettings",
+    "type": "core",
+    "category": "core",
+    "description": "Shared in-game settings UI with RU/EN localization, three-column mod selection, per-mod filtering, section headers and backward-compatible client API.",
+    "bepInExGuid": "com.bamex.strandeddeep.modsettings",
+    "packagePaths": [
+        "BepInEx/plugins/StrandedDeepModSettings"
+    ],
+    "ownedPaths": [
+        "BepInEx/plugins/StrandedDeepModSettings"
+    ],
+    "install": {
+        "restartRequired": true
+    },
+    "dependencies": [
+        {
+            "id": "bepinex",
+            "required": true
+        }
+    ],
+    "optionalDependencies": [],
+    "conflicts": [],
+    "persistence": {
+        "usesBepInExConfig": false,
+        "usesGameSave": false,
+        "usesSidecarData": false,
+        "backupBeforeUpdate": false
+    },
+    "publishing": {
+        "repository": "stranded-deep-mod-settings",
+        "tag": "v0.4.3",
+        "releaseChannel": "stable"
+    }
 }

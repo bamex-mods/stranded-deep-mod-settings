@@ -460,6 +460,80 @@ namespace Bamex.StrandedDeep.ModSettings
                 action);
         }
 
+        public static bool SupportsHeaders()
+        {
+            return HasMethod(
+                "AddHeader",
+                new Type[]
+                {
+                    typeof(string),
+                    typeof(string),
+                    typeof(string),
+                    typeof(int)
+                });
+        }
+
+        public static bool AddHeader(
+            string modId,
+            string headerId,
+            string title,
+            int order)
+        {
+            return Invoke(
+                "AddHeader",
+                new Type[]
+                {
+                    typeof(string),
+                    typeof(string),
+                    typeof(string),
+                    typeof(int)
+                },
+                new object[]
+                {
+                    modId,
+                    headerId,
+                    title,
+                    order
+                });
+        }
+
+        public static bool AddHeaderLocalized(
+            string modId,
+            string headerId,
+            string titleRussian,
+            string titleEnglish,
+            int order)
+        {
+            bool ok =
+                Invoke(
+                    "AddHeaderLocalized",
+                    new Type[]
+                    {
+                        typeof(string),
+                        typeof(string),
+                        typeof(string),
+                        typeof(string),
+                        typeof(int)
+                    },
+                    new object[]
+                    {
+                        modId,
+                        headerId,
+                        titleRussian,
+                        titleEnglish,
+                        order
+                    });
+
+            if (ok)
+                return true;
+
+            return AddHeader(
+                modId,
+                headerId,
+                titleRussian,
+                order);
+        }
+
         public static bool RemoveMod(
             string modId)
         {
@@ -473,6 +547,35 @@ namespace Bamex.StrandedDeep.ModSettings
                 {
                     modId
                 });
+        }
+
+        private static bool HasMethod(
+            string methodName,
+            Type[] parameterTypes)
+        {
+            try
+            {
+                Type apiType =
+                    ResolveApiType();
+
+                if (apiType == null)
+                    return false;
+
+                MethodInfo method =
+                    apiType.GetMethod(
+                        methodName,
+                        BindingFlags.Public |
+                        BindingFlags.Static,
+                        null,
+                        parameterTypes,
+                        null);
+
+                return method != null;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static bool Invoke(

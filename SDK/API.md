@@ -1,6 +1,6 @@
-# Stranded Deep Mod Settings API v0.3
+# Stranded Deep Mod Settings API v0.4
 
-This is the shared native-style Options UI host for our Stranded Deep BepInEx mods.
+This is the shared native-style Options UI host for Stranded Deep BepInEx mods.
 
 Core rule
 ---------
@@ -11,21 +11,33 @@ Each client mod owns its own ConfigEntry/state, validation, persistence and runt
 Client mods do not compile against StrandedDeepModSettings.dll.
 They vendor SDK\ModSettingsClient.cs and use a SoftDependency. The helper discovers the host at runtime through BepInEx Chainloader + reflection.
 
-If StrandedDeepModSettings is absent, the client mod must still load and work; only the Settings -> MODS integration is unavailable.
+If StrandedDeepModSettings is absent, the client mod must still load and work; only Settings -> MODS integration is unavailable.
 
-Language model in v0.3
-----------------------
+v0.4 UI model
+-------------
+
+Settings -> MODS is rendered as three columns:
+
+1. Native Stranded Deep Options categories.
+2. Mod selector: ALL MODS plus every mod registered through RegisterMod/RegisterModLocalized.
+3. Settings content.
+
+Selecting ALL MODS renders the full registry, matching the previous v0.3 behavior.
+Selecting a specific mod renders only entries whose modId matches that mod.
+
+The mod selector is a host-side feature. Existing client DLLs require no source change or rebuild to appear in it.
+
+Language model
+--------------
 
 The host follows the language already rendered by the native Stranded Deep Options UI.
 
-For the supported bilingual API:
-
-Russian game UI -> Russian registered strings
-English/non-Russian game UI -> English registered strings
+Russian game UI -> Russian registered strings.
+English/non-Russian game UI -> English registered strings.
 
 The host does not add a separate language setting.
 
-The v0.2 single-language API remains available and binary/source compatible. Existing client mods continue to work unchanged, but their single registered string is shown in both game languages. To get automatic RU/EN switching, migrate the client to the *Localized methods below.
+The v0.2 single-language API remains available and binary/source compatible. Existing client mods continue to work unchanged, but their single registered string is shown in both game languages. To get automatic RU/EN switching, use the *Localized methods.
 
 Public compatibility API (v0.2)
 -------------------------------
@@ -127,8 +139,6 @@ AddChoiceLocalized(
     Func<int> getter,
     Action<int> setter)
 
-The RU and EN choice arrays must contain the same number of elements.
-
 AddButtonLocalized(
     string modId,
     string settingId,
@@ -139,113 +149,113 @@ AddButtonLocalized(
     string actionTextEnglish,
     Action action)
 
-Client integration
-------------------
+Section Header API (v0.4)
+-------------------------
 
-Copy the authoritative helper:
+AddHeader(
+    string modId,
+    string headerId,
+    string title,
+    int order)
 
-SDK\ModSettingsClient.cs
+AddHeaderLocalized(
+    string modId,
+    string headerId,
+    string titleRussian,
+    string titleEnglish,
+    int order)
 
-into the client mod source tree.
+Header is visual only:
 
-Recommended BepInEx dependency:
+- it has no ConfigEntry;
+- it has no getter/setter/action;
+- it is sorted together with controls by order;
+- it is not selectable;
+- controller navigation skips it;
+- repeated registration of the same headerId updates that header rather than duplicating it;
+- RemoveMod removes its headers together with its controls.
 
-[BepInDependency(
-    "com.bamex.strandeddeep.modsettings",
-    BepInDependency.DependencyFlags.SoftDependency)]
+Header IDs are independent from normal setting IDs. A header and a normal setting may use the same text ID without replacing each other, although using distinct IDs is recommended for clarity.
 
-Example bilingual slider
+Client capability check
+-----------------------
+
+The v0.4 SDK adds:
+
+SupportsHeaders()
+
+Use this when a client wants a graceful visual fallback on an older host.
+
+Example:
+
+    if (ModSettingsClient.SupportsHeaders())
+    {
+        ModSettingsClient.AddHeaderLocalized(
+            "rarefinds",
+            "vanilla_loot",
+            "ОБЫЧНЫЙ ЛУТ",
+            "VANILLA LOOT",
+            100);
+
+        ModSettingsClient.AddSliderLocalized(
+            "rarefinds",
+            "vehicle_parts",
+            "Детали транспорта",
+            "Vehicle Parts",
+            110,
+            0f,
+            1f,
+            0.05f,
+            100f,
+            "%",
+            "%",
+            0,
+            GetVehicleParts,
+            SetVehicleParts);
+    }
+    else
+    {
+        // Optional compatibility presentation for an older host.
+        ModSettingsClient.AddSlider(
+            "rarefinds",
+            "vehicle_parts",
+            "Обычный лут: Детали транспорта",
+            110,
+            0f,
+            1f,
+            0.05f,
+            100f,
+            "%",
+            0,
+            GetVehicleParts,
+            SetVehicleParts);
+    }
+
+If AddHeader/AddHeaderLocalized is called against an older host, the helper returns false and does not throw into the client mod.
+
+Backward compatibility
+----------------------
+
+The following must remain true:
+
+- old v0.2/v0.3 client DLLs work with the v0.4 host without recompilation;
+- old method signatures are unchanged;
+- no client gets a compile-time reference to StrandedDeepModSettings.dll;
+- Mod Settings never becomes the owner of a client's configuration values;
+- the middle mod-selector column is generated entirely from existing RegisterMod registrations;
+- Header is opt-in and is not required for existing mods.
+
+Rendering and navigation
 ------------------------
 
-ModSettingsClient.RegisterModLocalized(
-    "example",
-    "Интерфейс",
-    "Interface",
-    500);
+The host reuses the native Stranded Deep Options Canvas, TMP fonts, option controls, category style and ScrollRect behavior.
 
-ModSettingsClient.AddSliderLocalized(
-    "example",
-    "scale",
-    "Масштаб интерфейса",
-    "UI Scale",
-    100,
-    1.0f,
-    2.0f,
-    0.1f,
-    100.0f,
-    "%",
-    "%",
-    0,
-    GetScale,
-    SetScale);
+The v0.4 MODS view keeps the native left Options categories, adds a host-owned middle mod list, and retains the existing right settings renderer.
 
-Example bilingual toggle
-------------------------
+ALL MODS is always the first selector entry.
+The middle selector scrolls independently from the right settings list.
+The right list keeps the v0.2.1 auto-scroll-on-selection behavior.
 
-ModSettingsClient.AddToggleLocalized(
-    "example",
-    "enabled",
-    "Включено",
-    "Enabled",
-    200,
-    "Вкл.",
-    "On",
-    "Выкл.",
-    "Off",
-    GetEnabled,
-    SetEnabled);
+When a specific mod is selected, only that mod's registered entries are rendered on the right. ALL MODS renders all registered mods in normal mod/order sorting.
 
-Example bilingual choice
-------------------------
-
-string[] choicesRu = new string[]
-{
-    "Низко",
-    "Средне",
-    "Высоко"
-};
-
-string[] choicesEn = new string[]
-{
-    "Low",
-    "Medium",
-    "High"
-};
-
-ModSettingsClient.AddChoiceLocalized(
-    "example",
-    "quality",
-    "Качество",
-    "Quality",
-    300,
-    choicesRu,
-    choicesEn,
-    GetQualityIndex,
-    SetQualityIndex);
-
-Example bilingual action
-------------------------
-
-ModSettingsClient.AddButtonLocalized(
-    "example",
-    "reset",
-    "Сбросить настройки",
-    "Reset settings",
-    900,
-    "Сбросить",
-    "Reset",
-    ResetSettings);
-
-Backward compatibility behavior
--------------------------------
-
-The v0.3 ModSettingsClient helper tries the new localized host method first.
-If it is running with an older v0.2 host that does not expose that method, the helper falls back to the old single-language call using the Russian text. This preserves soft dependency and allows client mods to remain functional during staged upgrades.
-
-Rendering model
----------------
-
-Each registered mod becomes a native category/header inside Settings -> MODS.
-The page uses the game's existing Options Canvas, ScrollRect, TMP fonts, category header, slider/button templates, animations and layout.
-
-The host watches RegistryVersion and rebuilds the page when registrations change. Since v0.2.1, selected controls also auto-scroll into view for controller/keyboard navigation.
+Header entries are layout-only and never receive focus.

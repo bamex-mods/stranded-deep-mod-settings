@@ -1,3 +1,22 @@
+v0.4.3
+------
+- Added the host-owned middle MODS column: ALL MODS plus every registered mod.
+- Selecting a mod filters the existing right settings renderer by modId; ALL MODS preserves the complete registry view.
+- Existing client DLLs populate the new selector automatically through existing RegisterMod calls; no rebuild is required.
+- Added independent scrolling for the middle mod selector and right settings list.
+- Added Header registry entries plus AddHeader/AddHeaderLocalized public API methods.
+- Header entries are non-interactive, controller navigation skips them, and they participate in normal order sorting.
+- Added SDK SupportsHeaders() and graceful old-host fallback behavior.
+- Added automatic RU/EN localization for ALL MODS and localized Header content through the existing host language mechanism.
+- Long selector names wrap instead of being truncated with ellipsis; selector typography and spacing were polished for readability.
+- Long right-column setting names use TMP word wrapping instead of ellipsis.
+- Wrapped setting names grow only their own row height; one-line settings retain the native compact height.
+- Slider/Toggle/Choice/Button value/control geometry on the right remains unchanged horizontally.
+- Header titles use a smaller bold uppercase hierarchy, native separator and subsection spacing.
+- Preserved v0.3.1 native/MODS panel isolation and v0.2.1 settings auto-scroll.
+- Preserved all existing public method signatures and backward compatibility with previously built client DLLs.
+- No game-save, client-config ownership or gameplay changes.
+
 v0.3.1
 ------
 - Fixed a regression where MODS content could remain active together with a native Options panel and become visible below GENERAL when scrolling.
@@ -10,7 +29,7 @@ v0.3.1
 v0.3.0
 ------
 - Added automatic RU/EN localization following the native Stranded Deep Options UI language.
-- MODS tab now renders as МОДЫ in Russian and MODS in English/non-Russian UI.
+- MODS tab renders as МОДЫ in Russian and MODS in English/non-Russian UI.
 - Added backward-compatible bilingual API methods: RegisterModLocalized, AddSliderLocalized, AddToggleLocalized, AddChoiceLocalized and AddButtonLocalized.
 - Existing v0.2 client registrations remain supported unchanged.
 - Updated authoritative SDK\ModSettingsClient.cs with localized calls and v0.2 fallback.

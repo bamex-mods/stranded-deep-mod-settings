@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$GameRoot = $env:STRANDED_DEEP_GAME_ROOT
 )
 
@@ -49,7 +49,7 @@ $Args.Add("/out:$Output")
 foreach ($Ref in $Refs) { $Args.Add("/reference:$Ref") }
 $Args.Add($Source)
 
-Write-Host "=== BUILD StrandedDeepModSettings v0.3.1 ==="
+Write-Host "=== BUILD StrandedDeepModSettings v0.4.3 ==="
 Write-Host "Workspace: $PSScriptRoot"
 Write-Host "References: $($Refs.Count)"
 & $Compiler $Args.ToArray()
