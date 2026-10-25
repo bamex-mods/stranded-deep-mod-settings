@@ -11,13 +11,17 @@ $Managed = Join-Path $GameRoot "Stranded_Deep_Data\Managed"
 $BepInExCore = Join-Path $GameRoot "BepInEx\core"
 $Compiler = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 
-$Source = Join-Path $PSScriptRoot "StrandedDeepModSettings.cs"
+$Sources = @(
+    (Join-Path $PSScriptRoot "StrandedDeepModSettings.cs"),
+    (Join-Path $PSScriptRoot "WindowsFolderPicker.cs")
+)
 $OutDir = Join-Path $PSScriptRoot "out"
 $Output = Join-Path $OutDir "StrandedDeepModSettings.dll"
 
 foreach ($Required in @(
     $Compiler,
-    $Source,
+    $Sources[0],
+    $Sources[1],
     (Join-Path $BepInExCore "BepInEx.dll"),
     (Join-Path $Managed "Assembly-CSharp.dll"),
     (Join-Path $Managed "Unity.TextMeshPro.dll")
@@ -47,9 +51,9 @@ $Args.Add("/debug:pdbonly")
 $Args.Add("/langversion:5")
 $Args.Add("/out:$Output")
 foreach ($Ref in $Refs) { $Args.Add("/reference:$Ref") }
-$Args.Add($Source)
+foreach ($Source in $Sources) { $Args.Add($Source) }
 
-Write-Host "=== BUILD StrandedDeepModSettings v0.4.3 ==="
+Write-Host "=== BUILD StrandedDeepModSettings v0.5.0 ==="
 Write-Host "Workspace: $PSScriptRoot"
 Write-Host "References: $($Refs.Count)"
 & $Compiler $Args.ToArray()

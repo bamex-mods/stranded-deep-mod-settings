@@ -1,3 +1,15 @@
+v0.5.0
+------
+- Added native Windows FolderPicker (IFileDialog/FOS_PICKFOLDERS on STA thread).
+- Added live read-only Status and Progress UI controls (no controller focus).
+- Added DynamicButton with client-defined enabled state.
+- Added RU/EN localized variants and reflection SDK wrappers for all four APIs.
+- Restored controller focus through native Selectable.Select() rather than EventSystem.current.
+- Preserved all v0.4.3 public API signatures and existing three-column UI.
+- The r1 candidate was compiled and field-tested in game on 2026-10-25.
+- Runtime known-good SHA256: 38DD49305050CE877067ECB8F05F87257BD7EB5C16E601C12726BA35BEA097A2.
+- No game save, client configuration ownership, or gameplay logic changes.
+
 v0.4.3
 ------
 - Added the host-owned middle MODS column: ALL MODS plus every registered mod.

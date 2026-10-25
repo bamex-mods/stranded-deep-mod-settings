@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Reflection;
 using BepInEx.Bootstrap;
 
@@ -532,6 +532,115 @@ namespace Bamex.StrandedDeep.ModSettings
                 headerId,
                 titleRussian,
                 order);
+        }
+
+        // v0.5 API: assembly-neutral delegates, no host DLL dependency.
+        public static bool SupportsFolderPicker()
+        {
+            return HasMethod("AddFolderPicker", new Type[] {
+                typeof(string), typeof(string), typeof(string), typeof(int),
+                typeof(string), typeof(Func<string>), typeof(Action<string>) });
+        }
+
+        public static bool AddFolderPicker(
+            string modId, string settingId, string label, int order,
+            string browseText, Func<string> getter, Action<string> setter)
+        {
+            return Invoke("AddFolderPicker", new Type[] {
+                typeof(string), typeof(string), typeof(string), typeof(int),
+                typeof(string), typeof(Func<string>), typeof(Action<string>) },
+                new object[] { modId, settingId, label, order,
+                    browseText, getter, setter });
+        }
+
+        public static bool AddFolderPickerLocalized(
+            string modId, string settingId,
+            string labelRussian, string labelEnglish, int order,
+            string browseTextRussian, string browseTextEnglish,
+            Func<string> getter, Action<string> setter)
+        {
+            return Invoke("AddFolderPickerLocalized", new Type[] {
+                typeof(string), typeof(string), typeof(string), typeof(string),
+                typeof(int), typeof(string), typeof(string),
+                typeof(Func<string>), typeof(Action<string>) },
+                new object[] { modId, settingId, labelRussian, labelEnglish,
+                    order, browseTextRussian, browseTextEnglish, getter, setter });
+        }
+
+        public static bool AddStatus(
+            string modId, string settingId, string label, int order,
+            Func<string> textGetter, Func<int> severityGetter)
+        {
+            return Invoke("AddStatus", new Type[] {
+                typeof(string), typeof(string), typeof(string), typeof(int),
+                typeof(Func<string>), typeof(Func<int>) },
+                new object[] { modId, settingId, label, order,
+                    textGetter, severityGetter });
+        }
+
+        public static bool AddStatusLocalized(
+            string modId, string settingId,
+            string labelRussian, string labelEnglish, int order,
+            Func<string> textGetter, Func<int> severityGetter)
+        {
+            return Invoke("AddStatusLocalized", new Type[] {
+                typeof(string), typeof(string), typeof(string), typeof(string),
+                typeof(int), typeof(Func<string>), typeof(Func<int>) },
+                new object[] { modId, settingId, labelRussian, labelEnglish,
+                    order, textGetter, severityGetter });
+        }
+
+        public static bool AddProgress(
+            string modId, string settingId, string label, int order,
+            Func<float> progressGetter, Func<string> statusTextGetter,
+            Func<bool> indeterminateGetter, Func<bool> activeGetter)
+        {
+            return Invoke("AddProgress", new Type[] {
+                typeof(string), typeof(string), typeof(string), typeof(int),
+                typeof(Func<float>), typeof(Func<string>),
+                typeof(Func<bool>), typeof(Func<bool>) },
+                new object[] { modId, settingId, label, order, progressGetter,
+                    statusTextGetter, indeterminateGetter, activeGetter });
+        }
+
+        public static bool AddProgressLocalized(
+            string modId, string settingId,
+            string labelRussian, string labelEnglish, int order,
+            Func<float> progressGetter, Func<string> statusTextGetter,
+            Func<bool> indeterminateGetter, Func<bool> activeGetter)
+        {
+            return Invoke("AddProgressLocalized", new Type[] {
+                typeof(string), typeof(string), typeof(string), typeof(string),
+                typeof(int), typeof(Func<float>), typeof(Func<string>),
+                typeof(Func<bool>), typeof(Func<bool>) },
+                new object[] { modId, settingId, labelRussian, labelEnglish,
+                    order, progressGetter, statusTextGetter,
+                    indeterminateGetter, activeGetter });
+        }
+
+        public static bool AddDynamicButton(
+            string modId, string settingId, string label, int order,
+            string actionText, Action action, Func<bool> isEnabled)
+        {
+            return Invoke("AddDynamicButton", new Type[] {
+                typeof(string), typeof(string), typeof(string), typeof(int),
+                typeof(string), typeof(Action), typeof(Func<bool>) },
+                new object[] { modId, settingId, label, order,
+                    actionText, action, isEnabled });
+        }
+
+        public static bool AddDynamicButtonLocalized(
+            string modId, string settingId,
+            string labelRussian, string labelEnglish, int order,
+            string actionTextRussian, string actionTextEnglish,
+            Action action, Func<bool> isEnabled)
+        {
+            return Invoke("AddDynamicButtonLocalized", new Type[] {
+                typeof(string), typeof(string), typeof(string), typeof(string),
+                typeof(int), typeof(string), typeof(string),
+                typeof(Action), typeof(Func<bool>) },
+                new object[] { modId, settingId, labelRussian, labelEnglish,
+                    order, actionTextRussian, actionTextEnglish, action, isEnabled });
         }
 
         public static bool RemoveMod(

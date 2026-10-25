@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using BepInEx;
@@ -15,7 +15,10 @@ namespace StrandedDeepModSettings
         Toggle = 1,
         Choice = 2,
         Button = 3,
-        Header = 4
+        Header = 4,
+        FolderPicker = 5,
+        Status = 6,
+        Progress = 7
     }
 
     internal class ModSettingDefinition
@@ -51,6 +54,19 @@ namespace StrandedDeepModSettings
         public string ActionTextRussian;
         public string ActionTextEnglish;
         public Action ButtonAction;
+
+        // v0.5: pure delegate-backed controls; client mods retain all data.
+        public Func<bool> EnabledGetter;
+        public string BrowseTextRussian;
+        public string BrowseTextEnglish;
+        public Func<string> StringGetter;
+        public Action<string> StringSetter;
+        public Func<string> StatusTextGetter;
+        public Func<int> SeverityGetter;
+        public Func<float> ProgressGetter;
+        public Func<string> ProgressStatusGetter;
+        public Func<bool> IndeterminateGetter;
+        public Func<bool> ActiveGetter;
     }
 
     internal class ModDefinition
@@ -461,6 +477,101 @@ namespace StrandedDeepModSettings
                 header);
         }
 
+        // Additive v0.5 API: none of the v0.4.3 signatures are changed.
+        public static void AddFolderPicker(
+            string modId, string settingId, string label, int order,
+            string browseText, Func<string> getter, Action<string> setter)
+        {
+            AddFolderPickerLocalized(modId, settingId, label, label, order,
+                browseText, browseText, getter, setter);
+        }
+
+        public static void AddFolderPickerLocalized(
+            string modId, string settingId,
+            string labelRussian, string labelEnglish, int order,
+            string browseTextRussian, string browseTextEnglish,
+            Func<string> getter, Action<string> setter)
+        {
+            ModSettingDefinition setting = NewSetting(modId, settingId,
+                labelRussian, labelEnglish, order, ModSettingKind.FolderPicker);
+            setting.BrowseTextRussian = FirstNonEmpty(
+                browseTextRussian, browseTextEnglish, "Выбрать");
+            setting.BrowseTextEnglish = FirstNonEmpty(
+                browseTextEnglish, browseTextRussian, "Browse");
+            setting.StringGetter = getter;
+            setting.StringSetter = setter;
+            UpsertSetting(modId, setting);
+        }
+
+        public static void AddStatus(
+            string modId, string settingId, string label, int order,
+            Func<string> textGetter, Func<int> severityGetter)
+        {
+            AddStatusLocalized(modId, settingId, label, label, order,
+                textGetter, severityGetter);
+        }
+
+        public static void AddStatusLocalized(
+            string modId, string settingId,
+            string labelRussian, string labelEnglish, int order,
+            Func<string> textGetter, Func<int> severityGetter)
+        {
+            ModSettingDefinition setting = NewSetting(modId, settingId,
+                labelRussian, labelEnglish, order, ModSettingKind.Status);
+            setting.StatusTextGetter = textGetter;
+            setting.SeverityGetter = severityGetter;
+            UpsertSetting(modId, setting);
+        }
+
+        public static void AddProgress(
+            string modId, string settingId, string label, int order,
+            Func<float> progressGetter, Func<string> statusTextGetter,
+            Func<bool> indeterminateGetter, Func<bool> activeGetter)
+        {
+            AddProgressLocalized(modId, settingId, label, label, order,
+                progressGetter, statusTextGetter, indeterminateGetter, activeGetter);
+        }
+
+        public static void AddProgressLocalized(
+            string modId, string settingId,
+            string labelRussian, string labelEnglish, int order,
+            Func<float> progressGetter, Func<string> statusTextGetter,
+            Func<bool> indeterminateGetter, Func<bool> activeGetter)
+        {
+            ModSettingDefinition setting = NewSetting(modId, settingId,
+                labelRussian, labelEnglish, order, ModSettingKind.Progress);
+            setting.ProgressGetter = progressGetter;
+            setting.ProgressStatusGetter = statusTextGetter;
+            setting.IndeterminateGetter = indeterminateGetter;
+            setting.ActiveGetter = activeGetter;
+            UpsertSetting(modId, setting);
+        }
+
+        public static void AddDynamicButton(
+            string modId, string settingId, string label, int order,
+            string actionText, Action action, Func<bool> isEnabled)
+        {
+            AddDynamicButtonLocalized(modId, settingId, label, label, order,
+                actionText, actionText, action, isEnabled);
+        }
+
+        public static void AddDynamicButtonLocalized(
+            string modId, string settingId,
+            string labelRussian, string labelEnglish, int order,
+            string actionTextRussian, string actionTextEnglish,
+            Action action, Func<bool> isEnabled)
+        {
+            ModSettingDefinition setting = NewSetting(modId, settingId,
+                labelRussian, labelEnglish, order, ModSettingKind.Button);
+            setting.ActionTextRussian = FirstNonEmpty(
+                actionTextRussian, actionTextEnglish, "Выполнить");
+            setting.ActionTextEnglish = FirstNonEmpty(
+                actionTextEnglish, actionTextRussian, "Run");
+            setting.ButtonAction = action;
+            setting.EnabledGetter = isEnabled;
+            UpsertSetting(modId, setting);
+        }
+
         public static void RemoveMod(
             string modId)
         {
@@ -668,6 +779,8 @@ namespace StrandedDeepModSettings
         public Button Button;
         public TMP_Text ValueLabel;
         public TMP_Text NameLabel;
+        public GameObject Root;
+        public Color ValueDefaultColor;
         public bool Suppress;
     }
 
@@ -834,7 +947,7 @@ namespace StrandedDeepModSettings
     [BepInPlugin(
         "com.bamex.strandeddeep.modsettings",
         "Stranded Deep Mod Settings",
-        "0.4.3")]
+        "0.5.0")]
     public class ModSettingsPlugin : BaseUnityPlugin
     {
         private const float ScanInterval = 0.50f;
@@ -895,7 +1008,7 @@ namespace StrandedDeepModSettings
         private void Awake()
         {
             Logger.LogInfo(
-                "Stranded Deep Mod Settings API v0.4.3 loaded.");
+                "Stranded Deep Mod Settings API v0.5.0 candidate loaded.");
 
             Logger.LogInfo(
                 "Waiting for the native Options menu.");
@@ -903,6 +1016,9 @@ namespace StrandedDeepModSettings
 
         private void Update()
         {
+            // OS dialog completions and all setters are marshalled to Unity's thread.
+            WindowsFolderPicker.PumpCallbacks();
+
             if (Time.unscaledTime < _nextScanTime)
                 return;
 
@@ -2011,10 +2127,12 @@ namespace StrandedDeepModSettings
                 if (runtime == null)
                     continue;
 
-                if (runtime.Slider != null)
+                if (runtime.Slider != null &&
+                    runtime.Slider.IsActive() && runtime.Slider.IsInteractable())
                     return runtime.Slider;
 
-                if (runtime.Button != null)
+                if (runtime.Button != null &&
+                    runtime.Button.IsActive() && runtime.Button.IsInteractable())
                     return runtime.Button;
             }
 
@@ -2745,6 +2863,18 @@ namespace StrandedDeepModSettings
                 return;
             }
 
+            if (definition.Kind == ModSettingKind.Status)
+            {
+                CreateStatusControl(category, definition);
+                return;
+            }
+
+            if (definition.Kind == ModSettingKind.Progress)
+            {
+                CreateProgressControl(category, definition);
+                return;
+            }
+
             if (
                 definition.Kind ==
                 ModSettingKind.Slider)
@@ -2811,6 +2941,7 @@ namespace StrandedDeepModSettings
 
             runtime.Slider =
                 slider;
+            runtime.Root = control;
 
             runtime.NameLabel =
                 FindTextByName(
@@ -2926,6 +3057,7 @@ namespace StrandedDeepModSettings
 
             runtime.Button =
                 button;
+            runtime.Root = control;
 
             runtime.NameLabel =
                 FindTextByName(
@@ -2971,6 +3103,165 @@ namespace StrandedDeepModSettings
 
             UpdateRuntimeControl(
                 runtime);
+        }
+
+        // Read-only row cloned from the game's own native option control.
+        // No controller navigation and no pointer interception.
+        private void CreateStatusControl(
+            Transform category, ModSettingDefinition definition)
+        {
+            GameObject control = Instantiate(
+                _sourceOptionButton.gameObject, category, false);
+            control.name = "Control - Mod - " + definition.Id;
+            DisableLocalizers(control.transform);
+            DisableComponentByFullName(
+                control, "Beam.UI.TMPOptionButtonViewAdapter");
+
+            Button button = control.GetComponent<Button>();
+            if (button != null)
+            {
+                button.onClick = new Button.ButtonClickedEvent();
+                button.interactable = false;
+                Navigation navigation = button.navigation;
+                navigation.mode = Navigation.Mode.None;
+                button.navigation = navigation;
+                button.enabled = false;
+            }
+            CanvasGroup group = control.GetComponent<CanvasGroup>();
+            if (group == null) group = control.AddComponent<CanvasGroup>();
+            group.blocksRaycasts = false;
+            group.interactable = false;
+
+            RuntimeControl runtime = new RuntimeControl();
+            runtime.Definition = definition;
+            runtime.Root = control;
+            runtime.NameLabel = FindTextByName(
+                control.transform, "Control Name");
+            runtime.ValueLabel = FindTextByName(
+                control.transform, "Label - Selection");
+            if (runtime.NameLabel != null)
+            {
+                runtime.NameLabel.text = Localize(definition.LabelRussian,
+                    definition.LabelEnglish, definition.Id);
+                ConfigureWrappedSettingLabel(control, runtime.NameLabel);
+            }
+            if (runtime.ValueLabel != null)
+            {
+                runtime.ValueDefaultColor = runtime.ValueLabel.color;
+                ConfigureCompactLabel(runtime.ValueLabel, false);
+            }
+            _runtimeControls.Add(runtime);
+            UpdateRuntimeControl(runtime);
+        }
+
+        private void CreateProgressControl(
+            Transform category, ModSettingDefinition definition)
+        {
+            GameObject control = Instantiate(
+                _sourceSlider.gameObject, category, false);
+            control.name = "Control - Mod - " + definition.Id;
+            DisableLocalizers(control.transform);
+            DisableComponentByFullName(
+                control, "Beam.UI.TMPOptionSliderViewAdapter");
+
+            Slider slider = control.GetComponent<Slider>();
+            if (slider == null)
+            {
+                DestroyImmediate(control);
+                return;
+            }
+            slider.onValueChanged = new Slider.SliderEvent();
+            slider.minValue = 0f;
+            slider.maxValue = 1f;
+            slider.interactable = false;
+            Navigation navigation = slider.navigation;
+            navigation.mode = Navigation.Mode.None;
+            slider.navigation = navigation;
+            // A disabled slider might dim itself; preserve the visual fill and
+            // disable input via CanvasGroup + Selectable.interactable.
+            CanvasGroup group = control.GetComponent<CanvasGroup>();
+            if (group == null) group = control.AddComponent<CanvasGroup>();
+            group.blocksRaycasts = false;
+            group.interactable = false;
+
+            RuntimeControl runtime = new RuntimeControl();
+            runtime.Definition = definition;
+            runtime.Root = control;
+            runtime.Slider = slider;
+            runtime.NameLabel = FindTextByName(
+                control.transform, "Control Name");
+            runtime.ValueLabel = FindTextByName(
+                control.transform, "Label - Slider Value");
+            if (runtime.NameLabel != null)
+            {
+                runtime.NameLabel.text = Localize(definition.LabelRussian,
+                    definition.LabelEnglish, definition.Id);
+                ConfigureWrappedSettingLabel(control, runtime.NameLabel);
+            }
+            if (runtime.ValueLabel != null)
+                ConfigureCompactLabel(runtime.ValueLabel, false);
+            _runtimeControls.Add(runtime);
+            UpdateRuntimeControl(runtime);
+        }
+
+        private void SetDynamicName(RuntimeControl runtime, string text)
+        {
+            if (runtime.NameLabel == null)
+                return;
+            string safe = text ?? "";
+            if (runtime.NameLabel.text == safe)
+                return;
+            runtime.NameLabel.text = safe;
+            if (runtime.Root != null)
+                ConfigureWrappedSettingLabel(runtime.Root, runtime.NameLabel);
+        }
+
+        private void BeginFolderPick(RuntimeControl runtime)
+        {
+            if (runtime == null || runtime.Definition == null ||
+                runtime.Button == null || !runtime.Button.interactable ||
+                WindowsFolderPicker.IsBusy)
+                return;
+
+            ModSettingDefinition definition = runtime.Definition;
+            if (definition.StringGetter == null || definition.StringSetter == null)
+                return;
+
+            string initialPath = definition.StringGetter();
+            bool launched = WindowsFolderPicker.TryBegin(
+                initialPath,
+                Localize(definition.LabelRussian,
+                    definition.LabelEnglish, definition.Id),
+                delegate(FolderPickerResult result)
+                {
+                    if (result != null && result.Outcome == FolderPickerOutcome.Success)
+                    {
+                        try { definition.StringSetter(result.SelectedPath); }
+                        catch (Exception ex)
+                        {
+                            Logger.LogWarning("FolderPicker setter failed: " + ex);
+                        }
+                    }
+                    else if (result != null && result.Outcome == FolderPickerOutcome.Error)
+                    {
+                        Logger.LogWarning("FolderPicker failed: " + result.Error);
+                    }
+                    UpdateRuntimeControl(runtime);
+                    // In this game's Unity UI assemblies, EventSystem.current
+                    // is not exposed. Return focus to the Browse control using
+                    // the native Selectable.Select() already used by v0.4.3.
+                    // Do not select a stale control after the menu is rebuilt.
+                    if (_optionsRoot != null &&
+                        _optionsRoot.gameObject.activeInHierarchy &&
+                        runtime.Button != null &&
+                        runtime.Button.IsActive() &&
+                        runtime.Button.IsInteractable())
+                    {
+                        runtime.Button.Select();
+                    }
+                });
+            if (!launched)
+                Logger.LogWarning("FolderPicker unavailable or already open.");
         }
 
         private void AttachAutoScroll(
@@ -3021,7 +3312,11 @@ namespace StrandedDeepModSettings
 
             try
             {
-                if (
+                if (definition.Kind == ModSettingKind.FolderPicker)
+                {
+                    BeginFolderPick(runtime);
+                }
+                else if (
                     definition.Kind ==
                     ModSettingKind.Toggle
                 )
@@ -3075,9 +3370,9 @@ namespace StrandedDeepModSettings
                     ModSettingKind.Button
                 )
                 {
-                    if (
-                        definition.ButtonAction != null
-                    )
+                    if (definition.ButtonAction != null &&
+                        (definition.EnabledGetter == null ||
+                        definition.EnabledGetter()))
                     {
                         definition.ButtonAction();
                     }
@@ -3124,6 +3419,74 @@ namespace StrandedDeepModSettings
 
             try
             {
+                if (definition.Kind == ModSettingKind.FolderPicker)
+                {
+                    bool valid = definition.StringGetter != null &&
+                        definition.StringSetter != null;
+                    if (runtime.Button != null)
+                        runtime.Button.interactable = valid &&
+                            !WindowsFolderPicker.IsBusy;
+                    string path = valid ? definition.StringGetter() : "";
+                    SetDynamicName(runtime,
+                        Localize(definition.LabelRussian,
+                            definition.LabelEnglish, definition.Id) +
+                        (String.IsNullOrEmpty(path) ? "" : "\n" + path));
+                    SetValueText(runtime,
+                        Localize(definition.BrowseTextRussian,
+                            definition.BrowseTextEnglish, "Browse"));
+                    return;
+                }
+
+                if (definition.Kind == ModSettingKind.Status)
+                {
+                    string status = definition.StatusTextGetter != null
+                        ? definition.StatusTextGetter() : "";
+                    int severity = definition.SeverityGetter != null
+                        ? definition.SeverityGetter() : 0;
+                    SetValueText(runtime, status);
+                    if (runtime.ValueLabel != null)
+                    {
+                        Color color = runtime.ValueDefaultColor;
+                        if (severity == 1) color = new Color(0.65f, 0.85f, 0.66f, 1f);
+                        if (severity == 2) color = new Color(0.95f, 0.79f, 0.53f, 1f);
+                        if (severity == 3) color = new Color(0.95f, 0.57f, 0.57f, 1f);
+                        runtime.ValueLabel.color = color;
+                    }
+                    return;
+                }
+
+                if (definition.Kind == ModSettingKind.Progress)
+                {
+                    bool active = definition.ActiveGetter == null ||
+                        definition.ActiveGetter();
+                    if (runtime.Root != null && runtime.Root.activeSelf != active)
+                    {
+                        runtime.Root.SetActive(active);
+                        RebuildLayouts();
+                    }
+                    if (!active) return;
+                    bool indeterminate = definition.IndeterminateGetter != null &&
+                        definition.IndeterminateGetter();
+                    float progress = definition.ProgressGetter != null
+                        ? definition.ProgressGetter() : 0f;
+                    if (Single.IsNaN(progress) || Single.IsInfinity(progress))
+                        progress = 0f;
+                    progress = Mathf.Clamp01(progress);
+                    if (runtime.Slider != null)
+                        runtime.Slider.value = indeterminate
+                            ? Mathf.PingPong(Time.unscaledTime * 0.65f, 1f)
+                            : progress;
+                    string detail = definition.ProgressStatusGetter != null
+                        ? definition.ProgressStatusGetter() : "";
+                    SetDynamicName(runtime,
+                        Localize(definition.LabelRussian,
+                            definition.LabelEnglish, definition.Id) +
+                        (String.IsNullOrEmpty(detail) ? "" : "\n" + detail));
+                    SetValueText(runtime, indeterminate ? "…" :
+                        Mathf.RoundToInt(progress * 100f).ToString() + "%");
+                    return;
+                }
+
                 if (
                     definition.Kind ==
                     ModSettingKind.Slider
@@ -3289,7 +3652,9 @@ namespace StrandedDeepModSettings
                     if (runtime.Button != null)
                     {
                         runtime.Button.interactable =
-                            definition.ButtonAction != null;
+                            definition.ButtonAction != null &&
+                            (definition.EnabledGetter == null ||
+                            definition.EnabledGetter());
                     }
 
                     SetValueText(

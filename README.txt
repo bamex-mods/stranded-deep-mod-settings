@@ -1,43 +1,57 @@
-Stranded Deep Mod Settings — canonical host workspace
+Stranded Deep Mod Settings v0.5.0
+=================================
 
-Plugin GUID: com.bamex.strandeddeep.modsettings
-Version: 0.4.3
-Status: FIELD-TESTED release source. Publication requires Distribution v1 verification (VERIFY OK / Runtime: MATCH).
-Previous public stable: 0.2.1.
+GUID: com.bamex.strandeddeep.modsettings
+Host: StrandedDeepModSettings.ModSettingsApi
+Source repository: https://github.com/bamex-mods/stranded-deep-mod-settings
 
-Ownership:
-- StrandedDeepModSettings.cs = host/UI/registry/language-aware renderer.
-- SDK/API.md and SDK/ModSettingsClient.cs = authoritative shared SDK.
-- Client mods own their ConfigEntry/state/persistence/runtime behavior.
-- UI Scaler source does NOT belong in this workspace.
+FEATURES
+--------
+Native-style Settings -> MODS: 3 columns (game tabs / mods / controls),
+localization RU/EN, independent list scrolling, long-name wrapping,
+headers and legacy Slider/Toggle/Choice/Button.
 
-v0.4.3 release highlights:
-- Three-column MODS interface: native Options categories / registered mods / settings.
-- ALL MODS shows the complete registry; selecting a mod filters the right renderer by modId.
-- Existing client DLLs populate the selector through their existing RegisterMod calls; no rebuild is required.
-- Middle selector and right settings use separate scrolling.
-- Long mod names wrap in the middle column.
-- Long setting names wrap in the right column while short rows remain compact.
-- Slider/Toggle/Choice/Button control geometry remains unchanged horizontally.
-- AddHeader / AddHeaderLocalized provide non-interactive visual subsections inside a mod.
-- Header titles use the native category-header family with a smaller bold uppercase hierarchy and native separator.
-- Automatic RU/EN localization follows the language already rendered by the native Stranded Deep Options UI.
-- Old v0.2 single-language registrations remain supported.
-- v0.3.1 native/MODS panel isolation and v0.2.1 settings auto-scroll are preserved.
+New in v0.5.0:
+- FolderPicker: native Windows system folder selection via IFileDialog on STA thread;
+  only confirmed selections call client setter on Unity main thread.
+- Status: read-only dynamic status text, levels Info/Success/Warning/Error.
+- Progress: read-only progress with determinate/indeterminate modes and visibility.
+- DynamicButton: clickable action whose enabled state is client-controlled.
+- Localized variants and reflection-based SDK wrappers for all new types.
 
-Safety / compatibility:
-- No game saves are modified.
-- No client ConfigEntry ownership changes.
-- No compile-time client reference to StrandedDeepModSettings.dll is required.
-- Mod Settings remains a global system menu in local split-screen.
+ARCHITECTURE
+------------
+Client mod owns config, game logic, persistence, and validation.
+Mod Settings owns registry, UI and delegate invocation only.
+SDK/ModSettingsClient.cs is compiled into client mods and uses BepInEx soft
+runtime reflection, without compile-time host dependency.
 
-Build:
-  powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -GameRoot "C:\Path\To\Stranded Deep"
+COMPATIBILITY
+-------------
+Existing client method signatures are unchanged. Older mods do not need
+recompiling. If the host is absent, client gameplay logic remains operational.
+This host is Windows-focused because native FolderPicker requires Windows Shell.
 
-Deploy:
-  powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1 -GameRoot "C:\Path\To\Stranded Deep"
+FIELD TEST
+----------
+User confirmed successful candidate r1 compilation, test deployment,
+and in-game operation on 2026-10-25, local split-screen Windows setup.
+Tested runtime DLL SHA-256:
+38DD49305050CE877067ECB8F05F87257BD7EB5C16E601C12726BA35BEA097A2
+This is the only runtime binary approved for v0.5.0 release packaging.
+The host source is unchanged from the field-tested r1 candidate.
 
-Runtime:
-  <GameRoot>\BepInEx\plugins\StrandedDeepModSettings\StrandedDeepModSettings.dll
+BUILD
+-----
+  powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -GameRoot $env:STRANDED_DEEP_GAME_ROOT
 
-GameRoot may also be supplied through STRANDED_DEEP_GAME_ROOT.
+WARNING: building from canonical source may generate a distinct DLL byte hash
+and does NOT mean it replaces the field-tested runtime. Do not deploy a
+new build over the proven runtime without a new in-game test.
+
+DISTRIBUTION
+------------
+Source of truth: dist/distribution.json
+Release packages are generated from tested runtime by the shared
+the shared distribution-v1 packaging and verification tools.
+No test plugin is part of the public runtime package.

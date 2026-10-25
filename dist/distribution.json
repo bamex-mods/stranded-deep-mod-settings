@@ -1,12 +1,12 @@
-﻿{
+{
     "schemaVersion": 1,
     "id": "mod-settings",
     "name": "Stranded Deep Mod Settings",
-    "version": "0.4.3",
+    "version": "0.5.0",
     "artifactBaseName": "StrandedDeepModSettings",
     "type": "core",
     "category": "core",
-    "description": "Shared in-game settings UI with RU/EN localization, three-column mod selection, per-mod filtering, section headers and backward-compatible client API.",
+    "description": "Native-style in-game mod settings UI with RU/EN localization, three-column navigation, FolderPicker, live Status/Progress and DynamicButton, backward-compatible reflection SDK.",
     "bepInExGuid": "com.bamex.strandeddeep.modsettings",
     "packagePaths": [
         "BepInEx/plugins/StrandedDeepModSettings"
@@ -33,7 +33,7 @@
     },
     "publishing": {
         "repository": "stranded-deep-mod-settings",
-        "tag": "v0.4.3",
+        "tag": "v0.5.0",
         "releaseChannel": "stable"
     }
 }

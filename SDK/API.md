@@ -1,4 +1,4 @@
-# Stranded Deep Mod Settings API v0.4
+# Stranded Deep Mod Settings API v0.5
 
 This is the shared native-style Options UI host for Stranded Deep BepInEx mods.
 
@@ -259,3 +259,52 @@ The right list keeps the v0.2.1 auto-scroll-on-selection behavior.
 When a specific mod is selected, only that mod's registered entries are rendered on the right. ALL MODS renders all registered mods in normal mod/order sorting.
 
 Header entries are layout-only and never receive focus.
+
+v0.5.0 API additions (field-tested 2026-10-25)
+--------------------------------------------------
+
+New host methods preserve every v0.4.3 public API signature:
+
+    AddFolderPicker(string modId, string settingId, string label, int order,
+        string browseText, Func<string> getter, Action<string> setter)
+    AddFolderPickerLocalized(string modId, string settingId,
+        string labelRussian, string labelEnglish, int order,
+        string browseTextRussian, string browseTextEnglish,
+        Func<string> getter, Action<string> setter)
+
+    AddStatus(string modId, string settingId, string label, int order,
+        Func<string> textGetter, Func<int> severityGetter)
+    AddStatusLocalized(string modId, string settingId,
+        string labelRussian, string labelEnglish, int order,
+        Func<string> textGetter, Func<int> severityGetter)
+
+    AddProgress(string modId, string settingId, string label, int order,
+        Func<float> progressGetter, Func<string> statusTextGetter,
+        Func<bool> indeterminateGetter, Func<bool> activeGetter)
+    AddProgressLocalized(string modId, string settingId,
+        string labelRussian, string labelEnglish, int order,
+        Func<float> progressGetter, Func<string> statusTextGetter,
+        Func<bool> indeterminateGetter, Func<bool> activeGetter)
+
+    AddDynamicButton(string modId, string settingId, string label, int order,
+        string actionText, Action action, Func<bool> isEnabled)
+    AddDynamicButtonLocalized(string modId, string settingId,
+        string labelRussian, string labelEnglish, int order,
+        string actionTextRussian, string actionTextEnglish,
+        Action action, Func<bool> isEnabled)
+
+Status severity: 0 Info, 1 Success, 2 Warning, 3 Error.
+Progress range: 0.0 to 1.0. activeGetter=false hides the row.
+Folder picker calls setter only when a folder is confirmed. Host never persists paths.
+Getters must be cheap, side-effect-free, and safe on Unity main thread.
+SDK supports new methods by reflection; if host is absent or old, wrapper returns false.
+
+
+Release compatibility note
+--------------------------
+
+The v0.5.0 host is an additive extension of v0.4.3. Existing public methods
+retain their signatures. New read-only Status/Progress entries do not receive
+controller focus, and values update through the established runtime refresh.
+
+The host owns UI only. Clients own the data, validation, and sidecars.
