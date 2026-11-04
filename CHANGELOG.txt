@@ -1,3 +1,19 @@
+v0.5.1
+------
+- Added read-only native Options UI preflight before any MODS injection.
+- Searches all scene OptionsMenuPresenter instances and prefers a structurally
+  ready active instance over the first object returned by Unity Resources.
+- Added clear, rate-limited warnings explaining missing UI templates or
+  absence of OptionsMenuPresenter (first after 10 s, then every 30 s).
+- Stops reinjection attempts for the session after an exception, preventing
+  repeated mutations of a potentially partially initialized Options view.
+- Preserved all v0.5.0 API signatures, SDK compatibility, and FolderPicker.
+- Confirmed in main menu and local split-screen with 13 registered mods,
+  72 rendered controls, native-tab switching, repeated opening and no duplicates.
+- Field-tested runtime DLL SHA256:
+  F4CEAD372D131511C5DA645770BDDF7C0FA4F4B6EB06E0CB000605E814C11D03.
+- The exact cause of the external Nexus user's missing MODS tab remains unverified.
+
 v0.5.0
 ------
 - Added native Windows FolderPicker (IFileDialog/FOS_PICKFOLDERS on STA thread).

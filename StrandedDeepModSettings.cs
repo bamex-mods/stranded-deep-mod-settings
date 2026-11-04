@@ -947,7 +947,7 @@ namespace StrandedDeepModSettings
     [BepInPlugin(
         "com.bamex.strandeddeep.modsettings",
         "Stranded Deep Mod Settings",
-        "0.5.0")]
+        "0.5.1")]
     public class ModSettingsPlugin : BaseUnityPlugin
     {
         private const float ScanInterval = 0.50f;
@@ -1005,13 +1005,23 @@ namespace StrandedDeepModSettings
         private bool _useRussian;
         private bool _panelOverlapLogged;
 
+        // v0.5.1: UI discovery remains passive until a valid native Options
+        // presenter is found. Diagnostics are rate-limited to avoid log spam.
+        private const float FirstDiagnosticDelay = 10f;
+        private const float DiagnosticRepeatInterval = 30f;
+        private float _nextUiDiagnosticTime;
+        private bool _injectionAborted;
+
         private void Awake()
         {
             Logger.LogInfo(
-                "Stranded Deep Mod Settings API v0.5.0 candidate loaded.");
+                "Stranded Deep Mod Settings API v0.5.1 diagnostic candidate loaded.");
 
             Logger.LogInfo(
                 "Waiting for the native Options menu.");
+
+            _nextUiDiagnosticTime =
+                Time.unscaledTime + FirstDiagnosticDelay;
         }
 
         private void Update()
@@ -1027,12 +1037,25 @@ namespace StrandedDeepModSettings
 
             if (_optionsRoot == null)
             {
+                if (_injectionAborted)
+                    return;
+
+                string diagnostic;
                 Transform found =
-                    FindOptionsRoot();
+                    FindOptionsRoot(out diagnostic);
 
                 if (found != null)
                 {
-                    TryInject(found);
+                    if (!TryInject(found))
+                    {
+                        LogUiWaiting(
+                            "Presenter was ready but injection did not complete. " +
+                            "The menu may have changed during initialization.");
+                    }
+                }
+                else
+                {
+                    LogUiWaiting(diagnostic);
                 }
 
                 return;
@@ -1070,35 +1093,157 @@ namespace StrandedDeepModSettings
             }
         }
 
-        private Transform FindOptionsRoot()
+        // Do not trust the first OptionsMenuPresenter returned by Resources.
+        // Multiple live or inactive presenters may coexist in different scenes.
+        // Prefer a structurally ready + active presenter, then a ready inactive one.
+        private Transform FindOptionsRoot(out string diagnostic)
         {
             MonoBehaviour[] behaviours =
                 Resources.FindObjectsOfTypeAll<MonoBehaviour>();
+
+            Transform firstReady = null;
+            int presenterCount = 0;
+            int readyCount = 0;
+            string firstFailure = null;
 
             foreach (MonoBehaviour behaviour in behaviours)
             {
                 if (behaviour == null)
                     continue;
 
-                GameObject go =
-                    behaviour.gameObject;
+                Type type = behaviour.GetType();
+                if (type.FullName != "Beam.UI.OptionsMenuPresenter")
+                    continue;
 
+                GameObject go = behaviour.gameObject;
                 if (!go.scene.IsValid())
                     continue;
 
-                Type type =
-                    behaviour.GetType();
+                presenterCount++;
 
-                if (
-                    type.FullName ==
-                    "Beam.UI.OptionsMenuPresenter"
-                )
+                string reason;
+                if (!HasNativeOptionsTemplates(behaviour.transform, out reason))
                 {
+                    if (firstFailure == null)
+                    {
+                        firstFailure =
+                            "Presenter '" + go.name + "' (scene '" +
+                            go.scene.name + "'): " + reason;
+                    }
+                    continue;
+                }
+
+                readyCount++;
+                if (go.activeInHierarchy)
+                {
+                    diagnostic = "ready active presenter found";
                     return behaviour.transform;
                 }
+
+                if (firstReady == null)
+                    firstReady = behaviour.transform;
+            }
+
+            if (firstReady != null)
+            {
+                diagnostic = "ready inactive presenter found";
+                return firstReady;
+            }
+
+            if (presenterCount == 0)
+            {
+                diagnostic =
+                    "No scene OptionsMenuPresenter found. " +
+                    "Check whether the Options menu has been created.";
+            }
+            else
+            {
+                diagnostic =
+                    "Found " + presenterCount + " OptionsMenuPresenter(s), " +
+                    readyCount + " structurally ready. " +
+                    (firstFailure ?? "Required native UI components unavailable.");
             }
 
             return null;
+        }
+
+        // This is a read-only preflight. Never clone, destroy, or reparent
+        // anything until the complete required template set is available.
+        private bool HasNativeOptionsTemplates(
+            Transform root,
+            out string reason)
+        {
+            Transform generalButton = FindDescendant(root, "Button - General");
+            if (generalButton == null)
+            {
+                reason = "missing Button - General";
+                return false;
+            }
+
+            Transform buttonsGroup = generalButton.parent;
+            if (buttonsGroup == null ||
+                FindDirectChild(buttonsGroup, "Button - About") == null)
+            {
+                reason = "missing Button - About beside Button - General";
+                return false;
+            }
+
+            string[] panelNames = new string[]
+            {
+                "Options - General",
+                "Options - Graphics",
+                "Options - Audio",
+                "Options - Input",
+                "Options - About"
+            };
+
+            foreach (string panelName in panelNames)
+            {
+                if (FindDescendant(root, panelName) == null)
+                {
+                    reason = "missing " + panelName;
+                    return false;
+                }
+            }
+
+            Transform generalPanel = FindDescendant(root, "Options - General");
+            Transform content = generalPanel.parent;
+            if (content == null || content.GetComponentInParent<ScrollRect>() == null)
+            {
+                reason = "native Options ScrollRect not found";
+                return false;
+            }
+
+            string[] templateNames = new string[]
+            {
+                "Category - Interface",
+                "Control - Ocean Rotation",
+                "Control - Crosshair"
+            };
+
+            foreach (string templateName in templateNames)
+            {
+                if (FindDescendant(generalPanel, templateName) == null)
+                {
+                    reason = "missing UI template " + templateName;
+                    return false;
+                }
+            }
+
+            reason = "OK";
+            return true;
+        }
+
+        private void LogUiWaiting(string reason)
+        {
+            if (Time.unscaledTime < _nextUiDiagnosticTime)
+                return;
+
+            _nextUiDiagnosticTime =
+                Time.unscaledTime + DiagnosticRepeatInterval;
+
+            Logger.LogWarning(
+                "MODS UI injection pending: " + (reason ?? "unknown reason"));
         }
 
         private bool TryInject(
@@ -1235,6 +1380,12 @@ namespace StrandedDeepModSettings
                 Logger.LogError(
                     "Failed to inject Mod Settings: " + ex);
 
+                // Do not repeatedly mutate a possibly half-initialized
+                // Options view after an exception. Restart is safer.
+                _injectionAborted = true;
+                Logger.LogError(
+                    "MODS injection aborted for this session after an exception. " +
+                    "Restart the game after correcting the error.");
                 _optionsRoot = null;
                 return false;
             }

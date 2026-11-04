@@ -1,9 +1,22 @@
-Stranded Deep Mod Settings v0.5.0
+Stranded Deep Mod Settings v0.5.1
 =================================
 
 GUID: com.bamex.strandeddeep.modsettings
 Host: StrandedDeepModSettings.ModSettingsApi
 Source repository: https://github.com/bamex-mods/stranded-deep-mod-settings
+
+WHAT'S NEW IN v0.5.1
+------------------
+- Validates native Options menu structure before injecting the MODS tab.
+- Searches all live scene OptionsMenuPresenter objects and prefers an active
+  structurally complete presenter instead of the first object found.
+- Writes detailed, rate-limited BepInEx warnings when native UI is missing.
+- Stops retrying injection after an exception to avoid further UI mutations.
+- Preserves all v0.5.0 public API and reflection SDK methods unchanged.
+
+Note: The field-tested binary still logs the phrase "diagnostic candidate".
+That string is intentionally kept unchanged to preserve the exact validated
+DLL/source. It is not a second or different release build.
 
 FEATURES
 --------
@@ -11,7 +24,7 @@ Native-style Settings -> MODS: 3 columns (game tabs / mods / controls),
 localization RU/EN, independent list scrolling, long-name wrapping,
 headers and legacy Slider/Toggle/Choice/Button.
 
-New in v0.5.0:
+Introduced in v0.5.0:
 - FolderPicker: native Windows system folder selection via IFileDialog on STA thread;
   only confirmed selections call client setter on Unity main thread.
 - Status: read-only dynamic status text, levels Info/Success/Warning/Error.
@@ -34,12 +47,21 @@ This host is Windows-focused because native FolderPicker requires Windows Shell.
 
 FIELD TEST
 ----------
+User verified v0.5.1 candidate in the main menu and loaded local split-screen:
+MODS page stays visible, mod filtering and native tab switching work, no
+button duplication, repeated menu opening works.
+Validated runtime DLL SHA-256:
+F4CEAD372D131511C5DA645770BDDF7C0FA4F4B6EB06E0CB000605E814C11D03
+The v0.5.1 release is packaged from that exact DLL, not rebuilt binaries.
+
+PREVIOUS v0.5.0 TEST
+--------------------
 User confirmed successful candidate r1 compilation, test deployment,
 and in-game operation on 2026-10-25, local split-screen Windows setup.
 Tested runtime DLL SHA-256:
 38DD49305050CE877067ECB8F05F87257BD7EB5C16E601C12726BA35BEA097A2
-This is the only runtime binary approved for v0.5.0 release packaging.
-The host source is unchanged from the field-tested r1 candidate.
+This is the previously approved v0.5.0 runtime, preserved in its GitHub release.
+The v0.5.1 host source matches the field-tested diagnostic candidate.
 
 BUILD
 -----
@@ -52,6 +74,5 @@ new build over the proven runtime without a new in-game test.
 DISTRIBUTION
 ------------
 Source of truth: dist/distribution.json
-Release packages are generated from tested runtime by the shared
-the shared distribution-v1 packaging and verification tools.
+Release packages are generated from tested runtime by the shared distribution-v1 packaging and verification tools.
 No test plugin is part of the public runtime package.

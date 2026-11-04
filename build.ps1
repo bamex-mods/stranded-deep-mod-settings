@@ -53,7 +53,7 @@ $Args.Add("/out:$Output")
 foreach ($Ref in $Refs) { $Args.Add("/reference:$Ref") }
 foreach ($Source in $Sources) { $Args.Add($Source) }
 
-Write-Host "=== BUILD StrandedDeepModSettings v0.5.0 ==="
+Write-Host "=== BUILD StrandedDeepModSettings v0.5.1 ==="
 Write-Host "Workspace: $PSScriptRoot"
 Write-Host "References: $($Refs.Count)"
 & $Compiler $Args.ToArray()
